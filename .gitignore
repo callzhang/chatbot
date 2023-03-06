@@ -1,1 +1,4 @@
 chats/
+.streamlit/secrets.toml
+names.txt
+*.pyc
