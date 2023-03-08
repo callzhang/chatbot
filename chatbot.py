@@ -2,10 +2,17 @@ import streamlit as st
 from streamlit_chat import message
 from utils import chat, imagegen, asr
 import pandas as pd
+from markdown2 import markdown as markdown2
+from markdown import markdown
+import time
+# from streamlit_extras.colored_header import colored_header
+from streamlit_extras.buy_me_a_coffee import button
 
+WIDE_LAYOUT_THRESHOLD = 400
+
+# 设置页面标题
 if 'layout' not in st.session_state:
     st.session_state.layout = 'centered'
-# 设置页面标题
 st.set_page_config(page_title="星尘小助手", page_icon=":star:", 
                    layout=st.session_state.layout, 
                    initial_sidebar_state="collapsed", menu_items={
@@ -14,7 +21,6 @@ st.set_page_config(page_title="星尘小助手", page_icon=":star:",
              'About': "# 星尘小助手. \n *仅限员工使用，请勿外传!*"
     })
 st.title("🪐星尘小助手")
-
 
 # 名字
 with open('names.txt', 'r') as f:
@@ -40,12 +46,7 @@ else:
 # 定义一个列表，用于保存对话内容。role：system，user，assistant
 if "conversation" not in st.session_state:
     st.session_state.conversation = chat.init_prompt.copy()
-
-## 功能函数
-def get_chat_response():
-    message = chat.chat(st.session_state.conversation)
-    return message
-
+    
 
 ## UI
 # 对文本输入进行应答
@@ -65,11 +66,13 @@ def gen_response():
     print(f'{st.session_state.name}({task}): {user_input}')
     st.session_state.conversation.append({"role": "user", "content": user_input})
     if task == '对话':
-        with st.spinner('正在思考'):
-            bot_response = get_chat_response()
-            response = bot_response["content"]
-            print(f'星尘小助手: {response}')
-            print('-'*50)
+        # with st.spinner('正在思考'):
+            # response = bot_response["content"]
+            # print(f'星尘小助手: {response}')
+            # print('-'*50)
+        queue = chat.chat_stream(st.session_state.conversation)
+        bot_response = {'role': 'assistant', 'content': '', 'queue': queue, 'active': True}
+        response = ''
         st.session_state.conversation.append(bot_response)
     elif task == '作图':
         with st.spinner('正在绘制'):
@@ -96,9 +99,6 @@ def gen_response():
             print('-'*50)
     else:
         raise NotImplementedError(task)
-    # page layout
-    if len(response)>100:
-        st.session_state.layout = 'wide'
     # log
     with open(f'chats/{st.session_state.name}.txt', 'a') as f:
         f.write(f'{st.session_state.name}: {user_input}\n')
@@ -110,18 +110,31 @@ def gen_response():
 md_formated = ""
 for i, c in enumerate(st.session_state.conversation):
     if c['role'] == "system":
-        pass
+        continue
     elif c['role'] == "user":
         message(c['content'], is_user=True, key=str(i),
                 avatar_style='initials', seed=st.session_state.name[-2:])
     elif c['role'] == "assistant":
-        message(c['content'], key=str(i), avatar_style='jdenticon')
-        # 富文本
-        if chat.is_markdown(c['content']):
-            c0, c1, c2 = st.columns([0.05,0.7,0.25])
-            with c1:
-                with st.expander('查看富文本结果', expanded=False):
-                    st.markdown(c['content'])
+        if c.get('active'):
+            queue = c['queue']
+            text = ''
+            stop = False
+            while queue.qsize():
+                content = queue.get()
+                if content == chat.finish_token:
+                    c.pop('active')
+                    c.pop('queue')
+                    queue.close()
+                else:
+                    text += content
+            
+            c['content'] += text
+            message(c['content'], key=str(i), avatar_style='jdenticon')
+            time.sleep(0.1)
+            st.experimental_rerun()
+        else:
+            message(c['content'], key=str(i), avatar_style='jdenticon')
+
     elif c['role'] == 'imagen':
         n = len(c['content'])
         cols = st.columns(n)
@@ -134,13 +147,19 @@ for i, c in enumerate(st.session_state.conversation):
             st.audio(c['content'])
     else:
         raise Exception(c)
+
+    # page layout
+    if st.session_state.layout != 'wide' and len(c['content']) > WIDE_LAYOUT_THRESHOLD:
+        st.session_state.layout = 'wide'
+        st.experimental_rerun()
+
 # 添加文本输入框
 c1, c2 = st.columns([0.15,0.85])
 with c1:
     task = st.selectbox('选择功能', ['对话', '作图', '语音识别'], key='task', label_visibility='collapsed')
 with c2:
     if task in ['对话', '作图']:
-        user_input = st.text_input("输入你的问题：", 
+        user_input = st.text_input(label="输入你的问题：", placeholder='输入你的问题，然后按回车提交。',
                             help='输入你的问题，然后按回车提交。', 
                             max_chars=500,
                             key='input_text',
@@ -148,11 +167,33 @@ with c2:
                             on_change=gen_response)
     elif task == '语音识别':
         audio_file = st.file_uploader('上传语音文件', type=asr.accepted_types, key='audio', label_visibility='collapsed', on_change=gen_response)
+
+
+
+
+## 功能区
+c1, c2, c3 = st.columns([0.1, 0.1, 0.8])
+# 清空对话
+with c1:
+    if st.button('🧹', key='clear'):
+        st.session_state.conversation = chat.init_prompt.copy()
+        # st.session_state.input_text = ""
+        st.session_state.audio = None
+        # st.session_state.task = '对话'
+        st.session_state.layout = 'centered'
+        st.experimental_rerun()
+with c2:
+    # 导出对话内容
+    def convert_history(conversation):
+        history = pd.DataFrame(conversation).query('role not in ["system", "audio"]')
+        return history.to_csv().encode('utf-8')
+    if st.download_button(label='📤', help='导出对话内容',
+                        data=convert_history(st.session_state.conversation), 
+                        file_name=f'history.csv', 
+                        mime='text/csv'):
+        st.success('导出成功！')
         
-# 导出对话内容
-history = pd.DataFrame(st.session_state.conversation).query('role not in ["system", "audio"]')
-if len(history)>0 and st.download_button(label='📤', help='导出对话内容',
-                      data=history.to_csv().encode('utf-8'), 
-                      file_name=f'{st.session_state.name}.csv', 
-                      mime='text/csv'):
-    st.success('导出成功！')
+from streamlit_extras.add_vertical_space import add_vertical_space
+add_vertical_space(20)
+# buy me a coffee
+button(username="derekz", floating=False, width=221)

@@ -1,3 +1,5 @@
 markdown
 retry
-streamlit_chat
+# streamlit_chat
+git+https://github.com/callzhang/st-chat.git
+streamlit_extras

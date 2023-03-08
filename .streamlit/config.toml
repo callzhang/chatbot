@@ -1,13 +1,13 @@
 [server]
-serverPort = 9045
 headless = true
+# Max size, in megabytes, for files uploaded with the file_uploader.
+maxUploadSize = 10
+
+[browser]
+# serverPort = 9045
 
 [theme] 
 primaryColor = "#3A86FF"
-
-[file]
-# Max size, in megabytes, for files uploaded with the file_uploader.
-maxUploadSize = 10
 
 [client]
 showErrorDetails = true
