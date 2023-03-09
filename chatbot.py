@@ -71,7 +71,12 @@ def gen_response():
             # print(f'星尘小助手: {response}')
             # print('-'*50)
         queue = chat.chat_stream(st.session_state.conversation)
-        bot_response = {'role': 'assistant', 'content': '', 'queue': queue, 'active': True}
+        bot_response = {'role': 'assistant', 
+                        'content': '', 
+                        'queue': queue, 
+                        'active': True,
+                        'start': time.time()
+                        }
         response = ''
         st.session_state.conversation.append(bot_response)
     elif task == '作图':
@@ -107,6 +112,11 @@ def gen_response():
 
 
 # 显示对话内容
+def finish_reply(chat):
+    chat.pop('active')
+    chat.pop('queue')
+    chat.pop('start')
+    
 md_formated = ""
 for i, c in enumerate(st.session_state.conversation):
     if c['role'] == "system":
@@ -117,20 +127,25 @@ for i, c in enumerate(st.session_state.conversation):
     elif c['role'] == "assistant":
         if c.get('active'):
             queue = c['queue']
+            # 超时
+            if time.time() - c['start'] > 30:
+                finish_reply(c)
+                queue.close()
+                c['content'] += '\n抱歉出了点问题，请重试...'
+            # 获取数据
             text = ''
-            stop = False
             while queue.qsize():
                 content = queue.get()
                 if content == chat.finish_token:
-                    c.pop('active')
-                    c.pop('queue')
+                    finish_reply(c)
                     queue.close()
                 else:
                     text += content
-            
+                    c['start'] = time.time()
+            # 渲染
             c['content'] += text
             message(c['content'], key=str(i), avatar_style='jdenticon')
-            time.sleep(0.1)
+            time.sleep(0.2)
             st.experimental_rerun()
         else:
             message(c['content'], key=str(i), avatar_style='jdenticon')
@@ -175,7 +190,7 @@ with c2:
 c1, c2, c3 = st.columns([0.1, 0.1, 0.8])
 # 清空对话
 with c1:
-    if st.button('🧹', key='clear'):
+    if st.button('🧹', key='clear', help='清空对话'):
         st.session_state.conversation = chat.init_prompt.copy()
         # st.session_state.input_text = ""
         st.session_state.audio = None
@@ -187,7 +202,7 @@ with c2:
     def convert_history(conversation):
         history = pd.DataFrame(conversation).query('role not in ["system", "audio"]')
         return history.to_csv().encode('utf-8')
-    if st.download_button(label='📤', help='导出对话内容',
+    if st.download_button(label='📤', help='导出对话',
                         data=convert_history(st.session_state.conversation), 
                         file_name=f'history.csv', 
                         mime='text/csv'):
