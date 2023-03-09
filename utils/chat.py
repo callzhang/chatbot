@@ -2,6 +2,7 @@ from retry import retry
 import requests, json, re
 import streamlit as st
 import multiprocess as mp 
+import threading
 
 # 参数
 url = 'https://api.openai.com/v1/chat/completions'
@@ -53,7 +54,9 @@ def chat_stream(conversations: list):
     while chat_len(chat_history) > 2000:
         chat_history.pop(0)
     print(f'sending conversations rounds: {len(chat_history)}, length:{chat_len(chat_history)}')
-    q = mp.Queue()
+    # q = mp.Queue()
+    queue = []
+    lock = threading.Lock()
     data = {
         'model': model,
         'messages': chat_history,
@@ -64,19 +67,22 @@ def chat_stream(conversations: list):
         'Content-Type': 'application/json',
         'Authorization': f'Bearer {st.secrets.key}'
     }
-    p = mp.Process(target=get_response, args=(q, header, data))
-    p.start()
-    return q
+    # p = mp.Process(target=get_response, args=(q, header, data))
+    t = threading.Thread(target=get_response, args=(header, data, queue, lock))
+    t.start()
+    return queue, lock, t
     
 
-def get_response(q, header, data):
+def get_response(header, data, queue, lock):
     response = requests.post(url, headers=header, json=data, stream=True, timeout=60)
     if response.ok:
         for line in response.iter_lines():
             if not line:
                 continue
             if line == finish_token.encode():
-                q.put(finish_token)
+                # q.put(finish_token)
+                with lock:
+                    queue.append(finish_token)
                 print('\n'+'-'*60)
                 return
             try:
@@ -86,7 +92,9 @@ def get_response(q, header, data):
                 if key == 'data':
                     content = value['choices'][0]['delta'].get('content')
                     if content:
-                        q.put(content)
+                        # q.put(content)
+                        with lock:
+                            queue.append(content)
                         print(content, end='')
                 else:
                     raise Exception(line.decode())
@@ -95,8 +103,11 @@ def get_response(q, header, data):
     else:
         estring = f'出错啦，请重试: {response.status_code}, {response.reason}'
         print(estring)
-        q.put(estring)
-        q.put(finish_token)
+        # q.put(estring)
+        # q.put(finish_token)
+        with lock:
+            queue.append(estring)
+            queue.append(finish_token)
         return
 
 

@@ -69,15 +69,13 @@ def gen_response():
         return
     # response
     if task == '对话':
-        # with st.spinner('正在思考'):
-            # response = bot_response["content"]
-            # print(f'星尘小助手: {response}')
-            # print('-'*50)
-        queue = chat.chat_stream(st.session_state.conversation)
+        queue, lock, thread = chat.chat_stream(st.session_state.conversation)
         bot_response = {'role': 'assistant', 
                         'content': '', 
                         'queue': queue, 
+                        'lock': lock,
                         'active': True,
+                        'thread': thread,
                         'start': time.time()
                         }
         response = ''
@@ -116,9 +114,13 @@ def gen_response():
 
 # 显示对话内容
 def finish_reply(chat):
+    # chat['queue'].close()
+    chat['thread'].join()
     chat.pop('active')
     chat.pop('queue')
     chat.pop('start')
+    chat.pop('lock')
+    chat.pop('thread')
     
 md_formated = ""
 for i, c in enumerate(st.session_state.conversation):
@@ -132,26 +134,24 @@ for i, c in enumerate(st.session_state.conversation):
                 avatar_style='initials', seed=st.session_state.name[-2:])
     elif role == "assistant":
         if c.get('active'):
-            queue = c['queue']
+            queue, lock, thread = c['queue'], c['lock'], c['thread']
             # 超时
             if time.time() - c['start'] > 30:
-                finish_reply(c)
-                queue.close()
+                # queue.close()
+                thread.join()
                 c['content'] += '\n\n抱歉出了点问题，请重试...'
             # 获取数据
             text = ''
-            stop = False
-            while True:
-                content = queue.get()
-                if content == chat.finish_token:
-                    finish_reply(c)
-                    queue.close()
-                    break
-                elif not content:
-                    break
-                else:
-                    text += content
-                    c['start'] = time.time()
+            with lock:
+                while queue:
+                    content = queue[0] #queue.get()
+                    if content == chat.finish_token:
+                        finish_reply(c)
+                        break
+                    else:
+                        text += queue.pop(0)
+                        c['start'] = time.time()
+                    
             # 渲染
             c['content'] += text
             message(c['content'], key=str(i), avatar_style='jdenticon')
