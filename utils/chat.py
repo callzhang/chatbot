@@ -16,14 +16,19 @@ init_prompt = [
     {"role": "assistant", "content": f"你好，请问有什么问题我可以解答？"},
 ]
 
+keys_keep = ['role', 'content']
 
-# OpenAI请求
+def chat_len(conversations):
+    chat_string = ' '.join(c['content'] for c in conversations)
+    return len(chat_string)
+
+# OpenAI请求(同步)
 @retry(tries=3, delay=1)
 def chat(conversations):
-    chat_history = [c for c in conversations if c['role'] not in 'audio']
-    while len(json.dumps(chat_history)) > 2000:
+    # 过滤
+    chat_history = [{k:c[k] for k in keys_keep} for c in conversations if c['role'] not in 'audio']
+    while chat_len(chat_history) > 2000:
         chat_history.pop(0)
-    # print(f'conversation length: {len(json.dumps(conversation))}')
     data = {
         'model': model,
         'messages': chat_history,
@@ -39,12 +44,16 @@ def chat(conversations):
     return message
 
 
-# receiving streaming server-sent events
-def chat_stream(chat: str):
+# receiving streaming server-sent events（异步）
+def chat_stream(conversations: list):
+    chat_history = [{k:c[k] for k in keys_keep} for c in conversations if c['role'] not in 'audio']
+    while chat_len(chat_history) > 2000:
+        chat_history.pop(0)
+    print(f'sending conversations rounds: {len(chat_history)}, length:{chat_len(chat_history)}')
     q = mp.Queue()
     data = {
         'model': model,
-        'messages': chat,
+        'messages': chat_history,
         'stream': True,
         # 'temperature': temperature,
     }
@@ -52,41 +61,40 @@ def chat_stream(chat: str):
         'Content-Type': 'application/json',
         'Authorization': f'Bearer {st.secrets.key}'
     }
-    message = {'role': 'assistant', 'content': ''}
     p = mp.Process(target=get_response, args=(q, header, data))
     p.start()
     return q
     
 
 def get_response(q, header, data):
-    response = requests.post(url, headers=header, json=data, stream=True)
-    my_bar = st.progress(0)
-    i = 0
+    response = requests.post(url, headers=header, json=data, stream=True, timeout=60)
     if response.ok:
         for line in response.iter_lines():
             if not line:
                 continue
             if line == finish_token.encode():
                 q.put(finish_token)
-                print('-'*100)
+                print('\n'+'-'*60)
                 return
             try:
                 # Server-sent events are separated by double newline characters
                 key, value = line.decode().split(':', 1)
                 value = json.loads(value.strip())
                 if key == 'data':
-                    content = value['choices'][0]['delta']['content']
-                    q.put(content)
-                    print(content, end='')
-                    i += 1
-                    my_bar(i)
+                    content = value['choices'][0]['delta'].get('content')
+                    if content:
+                        q.put(content)
+                        print(content, end='')
                 else:
                     raise Exception(line.decode())
             except Exception as e:
-                pass
+                print(e)
     else:
-        print(f'Error2: {response.reason}')
-        q.put(f'出错啦，请重试: {response.status_code}')
+        estring = f'出错啦，请重试: {response.status_code}, {response.reason}'
+        print(estring)
+        q.put(estring)
+        q.put(finish_token)
+        return
 
 
 def is_markdown(text):
