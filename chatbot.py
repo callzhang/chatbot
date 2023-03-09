@@ -2,15 +2,14 @@ import streamlit as st
 from streamlit_chat import message
 from utils import chat, imagegen, asr
 import pandas as pd
-from markdown2 import markdown as markdown2
-from markdown import markdown
 import time
 # from streamlit_extras.colored_header import colored_header
 from streamlit_extras.buy_me_a_coffee import button
 
 WIDE_LAYOUT_THRESHOLD = 400
 
-# 设置页面标题
+# 初始化
+st.session_state.guest = True
 if 'layout' not in st.session_state:
     st.session_state.layout = 'centered'
 st.set_page_config(page_title="星尘小助手", page_icon=":star:", 
@@ -25,28 +24,27 @@ st.title("🪐星尘小助手")
 # 名字
 with open('names.txt', 'r') as f:
     names = [n.strip() for n in f.readlines()]
-name_pl = st.empty()
-if 'my_name' not in st.session_state:
-    if 'name' in st.session_state and st.session_state.name != '':
-        st.session_state.my_name = st.session_state.name
-    else:
-        st.warning('本系统需要消耗计算资源，特别是图片和语音功能；请适度体验AI的能力，尽量用在工作相关内容上😊')
-        st.session_state.name = name_pl.text_input('请输入你的名字', key='my_name', help='仅限员工使用，请勿外传！')
-else:
-    st.session_state.name = st.session_state.my_name
-if st.session_state.name == '':
+
+if 'name' not in st.session_state:
+    st.warning('本系统需要消耗计算资源，特别是图片和语音功能；请适度体验AI的能力，尽量用在工作相关内容上😊')
+    name = st.text_input('请输入你的名字', key='my_name', help='仅限员工使用，请勿外传！')
+    if name:
+        st.session_state.name = name
+        st.experimental_rerun()
     st.stop()
-elif st.session_state.name not in names:
-    st.warning('请输入正确的名字以使用本系统')
-    st.stop()
-else:
-    name_pl.empty()
+
+if st.session_state.name in names:
+    st.session_state.guest = False
     
 
 # 定义一个列表，用于保存对话内容。role：system，user，assistant
 if "conversation" not in st.session_state:
     st.session_state.conversation = chat.init_prompt.copy()
-    
+    if st.session_state.guest:
+        st.session_state.conversation.append(
+            chat.guest_prompt(st.session_state.name))
+    else:
+        st.session_state.conversation.append(chat.staff_prompt)
 
 ## UI
 # 对文本输入进行应答
@@ -65,6 +63,11 @@ def gen_response():
         
     print(f'{st.session_state.name}({task}): {user_input}')
     st.session_state.conversation.append({"role": "user", "content": user_input})
+    # guest 超长对话
+    if st.session_state.guest and len(st.session_state.conversation) > 10:
+        st.session_state.conversation.append({"role": "assistant", "content": '访客不支持长对话，请联系管理员'})
+        return
+    # response
     if task == '对话':
         # with st.spinner('正在思考'):
             # response = bot_response["content"]
@@ -109,22 +112,28 @@ def gen_response():
 # 显示对话内容
 md_formated = ""
 for i, c in enumerate(st.session_state.conversation):
-    if c['role'] == "system":
+    role, content = c['role'], c['content']
+    if role == "system":
         continue
-    elif c['role'] == "user":
-        message(c['content'], is_user=True, key=str(i),
+    elif role == 'server':# not implemented
+        message(content, is_user=False, key=str(i))
+    elif role == "user":
+        message(content, is_user=True, key=str(i),
                 avatar_style='initials', seed=st.session_state.name[-2:])
-    elif c['role'] == "assistant":
+    elif role == "assistant":
         if c.get('active'):
             queue = c['queue']
             text = ''
             stop = False
-            while queue.qsize():
+            while True:
                 content = queue.get()
                 if content == chat.finish_token:
                     c.pop('active')
                     c.pop('queue')
                     queue.close()
+                    break
+                elif not content:
+                    break
                 else:
                     text += content
             
@@ -135,16 +144,16 @@ for i, c in enumerate(st.session_state.conversation):
         else:
             message(c['content'], key=str(i), avatar_style='jdenticon')
 
-    elif c['role'] == 'imagen':
-        n = len(c['content'])
+    elif role == 'imagen':
+        n = len(content)
         cols = st.columns(n)
-        for i, col, url in zip(range(1, n+1), cols, c['content']):
+        for i, col, url in zip(range(1, n+1), cols, content):
             with col:
                 st.image(url, use_column_width=True, caption=f'图{i+1}')
-    elif c['role'] == 'audio':
+    elif role == 'audio':
         c1, c2 = st.columns([0.6,0.4])
         with c2:
-            st.audio(c['content'])
+            st.audio(content)
     else:
         raise Exception(c)
 
@@ -156,17 +165,17 @@ for i, c in enumerate(st.session_state.conversation):
 # 添加文本输入框
 c1, c2 = st.columns([0.15,0.85])
 with c1:
-    task = st.selectbox('选择功能', ['对话', '作图', '语音识别'], key='task', label_visibility='collapsed')
+    task = st.selectbox('选择功能', ['对话', '作图', '语音识别'], key='task')
 with c2:
     if task in ['对话', '作图']:
         user_input = st.text_input(label="输入你的问题：", placeholder='输入你的问题，然后按回车提交。',
                             help='输入你的问题，然后按回车提交。', 
                             max_chars=500,
                             key='input_text',
-                            label_visibility='collapsed',
+                            # label_visibility='collapsed',
                             on_change=gen_response)
     elif task == '语音识别':
-        audio_file = st.file_uploader('上传语音文件', type=asr.accepted_types, key='audio', label_visibility='collapsed', on_change=gen_response)
+        audio_file = st.file_uploader('上传语音文件', type=asr.accepted_types, key='audio', on_change=gen_response)
 
 
 
