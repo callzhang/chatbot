@@ -3,3 +3,4 @@ retry
 # streamlit_chat
 git+https://github.com/callzhang/st-chat.git
 streamlit_extras
+openai
