@@ -68,12 +68,10 @@ def gen_response():
         return
     # response
     if task == '对话':
-        queue, lock, thread = chat.chat_stream(st.session_state.conversation)
+        queue, thread = chat.chat_stream(st.session_state.conversation)
         bot_response = {'role': 'assistant', 
                         'content': '', 
                         'queue': queue, 
-                        'lock': lock,
-                        'active': True,
                         'thread': thread,
                         'start': time.time()
                         }
@@ -115,10 +113,8 @@ def gen_response():
 def finish_reply(chat):
     # chat['queue'].close()
     chat['thread'].join()
-    chat.pop('active')
     chat.pop('queue')
     chat.pop('start')
-    chat.pop('lock')
     chat.pop('thread')
     
 md_formated = ""
@@ -132,23 +128,22 @@ for i, c in enumerate(st.session_state.conversation):
         message(content, is_user=True, key=str(i),
                 avatar_style='initials', seed=st.session_state.name[-2:])
     elif role == "assistant":
-        if c.get('active'):
-            queue, lock, thread = c['queue'], c['lock'], c['thread']
+        if c.get('start'):
+            queue, thread = c['queue'], c['thread']
             # 超时
             if time.time() - c['start'] > 30:
                 finish_reply(c)
                 c['content'] += '\n\n抱歉出了点问题，请重试...'
             # 获取数据
             text = ''
-            with lock:
-                while queue:
-                    content = queue[0] #queue.get()
-                    if content == chat.finish_token:
-                        finish_reply(c)
-                        break
-                    else:
-                        text += queue.pop(0)
-                        c['start'] = time.time()
+            while len(queue):
+                content = queue.popleft()
+                if content == chat.finish_token:
+                    finish_reply(c)
+                    break
+                else:
+                    text += content
+                    c['start'] = time.time()
                     
             # 渲染
             c['content'] += text
@@ -198,7 +193,7 @@ c1, c2, c3 = st.columns([0.08, 0.08, 0.9])
 # 清空对话
 with c1:
     if st.button('🧹', key='clear', help='清空对话'):
-        st.session_state.conversation = chat.init_prompt.copy()
+        st.session_state.conversation = utils.init_prompt.copy()
         # st.session_state.input_text = ""
         st.session_state.audio = None
         # st.session_state.task = '对话'

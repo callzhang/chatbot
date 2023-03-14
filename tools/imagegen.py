@@ -29,7 +29,7 @@ def gen_image(prompt):
     }
     data = {
         "prompt": prompt,
-        "n": 4,
+        "n": 1,
         "size": "1024x1024" #1024x1024
     }
     res = requests.post(url, headers=header, json=data)
