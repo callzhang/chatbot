@@ -1,8 +1,8 @@
 import streamlit as st
 from streamlit_chat import message
-from utils import chat, imagegen, asr
+from tools import chat, imagegen, asr, utils
 import pandas as pd
-import time
+import time, datetime
 # from streamlit_extras.colored_header import colored_header
 from streamlit_extras.buy_me_a_coffee import button
 
@@ -39,12 +39,11 @@ if st.session_state.name in names:
 
 # 定义一个列表，用于保存对话内容。role：system，user，assistant
 if "conversation" not in st.session_state:
-    st.session_state.conversation = chat.init_prompt.copy()
+    st.session_state.conversation = utils.init_prompt.copy()
     if st.session_state.guest:
-        st.session_state.conversation.append(
-            chat.guest_prompt(st.session_state.name))
+        st.session_state.conversation += utils.guest_prompt(st.session_state.name)
     else:
-        st.session_state.conversation.append(chat.staff_prompt)
+        st.session_state.conversation += utils.staff_prompt(st.session_state.name)
 
 ## UI
 # 对文本输入进行应答
@@ -137,8 +136,7 @@ for i, c in enumerate(st.session_state.conversation):
             queue, lock, thread = c['queue'], c['lock'], c['thread']
             # 超时
             if time.time() - c['start'] > 30:
-                # queue.close()
-                thread.join()
+                finish_reply(c)
                 c['content'] += '\n\n抱歉出了点问题，请重试...'
             # 获取数据
             text = ''
@@ -161,11 +159,12 @@ for i, c in enumerate(st.session_state.conversation):
             message(c['content'], key=str(i), avatar_style='jdenticon')
 
     elif role == 'imagen':
-        n = len(content)
-        cols = st.columns(n)
-        for i, col, url in zip(range(1, n+1), cols, content):
-            with col:
-                st.image(url, use_column_width=True, caption=f'图{i+1}')
+        # n = len(content)
+        # cols = st.columns(n)
+        # for i, col, url in zip(range(1, n+1), cols, content):
+        #     with col:
+        #         st.image(url, use_column_width=True, caption=f'图{i+1}')
+        message(c['content'], key=str(i), avatar_style='jdenticon')
     elif role == 'audio':
         c1, c2 = st.columns([0.6,0.4])
         with c2:
@@ -181,12 +180,12 @@ for i, c in enumerate(st.session_state.conversation):
 # 添加文本输入框
 c1, c2 = st.columns([0.15,0.85])
 with c1:
-    task = st.selectbox('选择功能', ['对话', '作图', '语音识别'], key='task')
+    task = st.selectbox('选择功能', ['对话', '作图', '语音识别'], key='task', disabled=st.session_state.guest)
 with c2:
     if task in ['对话', '作图']:
         user_input = st.text_input(label="输入你的问题：", placeholder='输入你的问题，然后按回车提交。',
                             help='输入你的问题，然后按回车提交。', 
-                            max_chars=500,
+                            max_chars=100 if st.session_state.guest else 000,
                             key='input_text',
                             # label_visibility='collapsed',
                             on_change=gen_response)
@@ -194,10 +193,8 @@ with c2:
         audio_file = st.file_uploader('上传语音文件', type=asr.accepted_types, key='audio', on_change=gen_response)
 
 
-
-
 ## 功能区
-c1, c2, c3 = st.columns([0.1, 0.1, 0.8])
+c1, c2, c3 = st.columns([0.08, 0.08, 0.9])
 # 清空对话
 with c1:
     if st.button('🧹', key='clear', help='清空对话'):
@@ -208,15 +205,15 @@ with c1:
         st.session_state.layout = 'centered'
         st.experimental_rerun()
 with c2:
-    # 导出对话内容
-    def convert_history(conversation):
-        history = pd.DataFrame(conversation).query('role not in ["system", "audio"]')
-        return history.to_csv().encode('utf-8')
     if st.download_button(label='📤', help='导出对话',
-                        data=convert_history(st.session_state.conversation), 
-                        file_name=f'history.csv', 
+                        data=utils.convert_history(st.session_state.conversation), 
+                        file_name=f'history.md', 
                         mime='text/csv'):
         st.success('导出成功！')
+with c3:
+    if st.session_state.name == "Derek":
+        if st.button('👨‍💻', key='dev', help='开发者信息'):
+            st.markdown(st.session_state.conversation)
         
 from streamlit_extras.add_vertical_space import add_vertical_space
 add_vertical_space(20)

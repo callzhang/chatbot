@@ -34,4 +34,13 @@ def gen_image(prompt):
     }
     res = requests.post(url, headers=header, json=data)
     urls = [r['url'] for r in res.json()['data']]
-    return urls
+    return url2markdown(urls)
+
+
+# utls to markdown
+def url2markdown(urls):
+    md_formated = ""
+    for i, url in enumerate(urls):
+        md_formated += f"""![图{i+1}]({url})\n\n"""
+    # print(f'md_formated: {md_formated}')
+    return md_formated

@@ -1,7 +1,6 @@
 from retry import retry
 import requests, json, re
 import streamlit as st
-import multiprocess as mp 
 import threading
 
 # 参数
@@ -10,17 +9,7 @@ model = 'gpt-3.5-turbo'
 temperature = 0.7
 finish_token = 'data: [DONE]'
 roles2keep = ['user', 'assistant', 'imagen']
-
-# init prompt
-init_prompt = [
-    {"role": "system", "content": "你是星尘小助手，Your name is Stardust AI Bot. 你是由星尘数据的CEO Derek创造的，你的底层是基于Transformer的技术研发。你会解答各种AI专业问题，请回答精简一些。如果你不能回答，请访问“stardust.ai”"},
-    {"role": "system", "content": "星尘数据（Stardust）成立于2017年5月，是行业领先的数据标注和数据策略公司。星尘数据将专注AI数据技术，通过Autolabeling技术、数据策略专家服务和数据闭环系统服务，为全球人工智能企业特别是自动驾驶行业提供“燃料”，最终实现AI的平民化。"},
-    
-]
-
 keys_keep = ['role', 'content']
-staff_prompt = {"role": "assistant", "content": f"你好，请问有什么可以帮助你？"}
-guest_prompt = lambda name: {'role': 'assistant', 'content': '欢迎您，访客：' + name}
 
 def chat_len(conversations):
     chat_string = ' '.join(c['content'] for c in conversations)
@@ -129,9 +118,3 @@ def is_markdown(text):
     return is_md
 
 
-if __name__ == '__main__':
-    prompt = init_prompt.append({
-        'role': 'user',
-        'content': '请写一首关于星尘的诗'
-    })
-    chat_stream(init_prompt)

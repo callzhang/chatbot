@@ -1,7 +1,7 @@
 [server]
 headless = true
 # Max size, in megabytes, for files uploaded with the file_uploader.
-maxUploadSize = 10
+maxUploadSize = 100
 
 [browser]
 # serverPort = 9045
