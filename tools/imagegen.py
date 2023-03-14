@@ -1,6 +1,7 @@
 import re, requests
 import streamlit as st
 from retry import retry
+from .utils import url2html, url2markdown
 
 url = 'https://api.openai.com/v1/images/generations'
 lab_url = 'https://labs.openai.com/'
@@ -34,7 +35,7 @@ def gen_image(prompt):
     }
     res = requests.post(url, headers=header, json=data)
     urls = [r['url'] for r in res.json()['data']]
-    return urls
+    return url2markdown(urls)
 
 
 
