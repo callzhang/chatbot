@@ -35,3 +35,20 @@ def convert_history(conversation):
     # with open('export.md', 'w') as f:
     #     f.write(md_formated)
     return md_formated
+
+
+# utls to markdown
+def url2markdown(urls):
+    md_formated = ""
+    for i, url in enumerate(urls):
+        md_formated += f"""![图{i+1}]({url})\n\n"""
+    # print(f'md_formated: {md_formated}')
+    return md_formated
+
+
+def url2html(urls):
+    # convert urls to html tags
+    html_tags = ""
+    for i, url in enumerate(urls):
+        html_tags += f"<p><a href='{url}' target='_top'><img src='{url}' height='150px' alt=图{i}></a><p>"
+    return html_tags

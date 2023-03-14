@@ -55,10 +55,9 @@ def gen_response():
             return
         st.session_state.input_text = ""
     elif task == '语音识别':
-        audio_file = st.session_state.audio
-        if audio_file is None:
-            return
-        user_input = audio_file.name
+        audio_file = st.session_state.get('audio')
+        if audio_file:
+            user_input = audio_file.name
         
     print(f'{st.session_state.name}({task}): {user_input}')
     st.session_state.conversation.append({"role": "user", "content": user_input})
@@ -75,7 +74,7 @@ def gen_response():
                         'thread': thread,
                         'start': time.time()
                         }
-        response = ''
+        response = None
         st.session_state.conversation.append(bot_response)
     elif task == '作图':
         with st.spinner('正在绘制'):
@@ -103,10 +102,12 @@ def gen_response():
     else:
         raise NotImplementedError(task)
     # log
-    with open(f'chats/{st.session_state.name}.txt', 'a') as f:
-        f.write(f'{st.session_state.name}: {user_input}\n')
-        f.write(f'星尘小助手({task}): {response}\n')
-        f.write('-'*50 + '\n')
+    with open(f'chats/{st.session_state.name}.md', 'a') as f:
+        tstring = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        f.write(f'**[{tstring}] {st.session_state.name}: {user_input.strip()}**\n')
+        if response:
+            f.write(f'星尘小助手({task}): {response}\n')
+            f.write('-'*50 + '\n')
 
 
 # 显示对话内容
@@ -116,6 +117,9 @@ def finish_reply(chat):
     chat.pop('queue')
     chat.pop('start')
     chat.pop('thread')
+    with open(f'chats/{st.session_state.name}.md', 'a') as f:
+        response = c['content']
+        f.write(f'星尘小助手: {response}\n\n---\n\n')
     
 md_formated = ""
 for i, c in enumerate(st.session_state.conversation):
@@ -132,33 +136,26 @@ for i, c in enumerate(st.session_state.conversation):
             queue, thread = c['queue'], c['thread']
             # 超时
             if time.time() - c['start'] > 30:
-                finish_reply(c)
                 c['content'] += '\n\n抱歉出了点问题，请重试...'
+                finish_reply(c)
             # 获取数据
-            text = ''
             while len(queue):
                 content = queue.popleft()
                 if content == chat.finish_token:
                     finish_reply(c)
                     break
                 else:
-                    text += content
+                    c['content'] += content
                     c['start'] = time.time()
                     
             # 渲染
-            c['content'] += text
             message(c['content'], key=str(i), avatar_style='jdenticon')
-            time.sleep(0.2)
+            time.sleep(0.3)
             st.experimental_rerun()
         else:
             message(c['content'], key=str(i), avatar_style='jdenticon')
 
     elif role == 'imagen':
-        # n = len(content)
-        # cols = st.columns(n)
-        # for i, col, url in zip(range(1, n+1), cols, content):
-        #     with col:
-        #         st.image(url, use_column_width=True, caption=f'图{i+1}')
         message(c['content'], key=str(i), avatar_style='jdenticon')
     elif role == 'audio':
         c1, c2 = st.columns([0.6,0.4])
@@ -168,7 +165,7 @@ for i, c in enumerate(st.session_state.conversation):
         raise Exception(c)
 
     # page layout
-    if st.session_state.layout != 'wide' and len(c['content']) > WIDE_LAYOUT_THRESHOLD:
+    if st.session_state.layout != 'wide' and c['role']=='assistant' and len(c['content']) > WIDE_LAYOUT_THRESHOLD:
         st.session_state.layout = 'wide'
         st.experimental_rerun()
 

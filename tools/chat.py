@@ -11,7 +11,6 @@ temperature = 0.7
 finish_token = 'data: [DONE]'
 roles2keep = ['user', 'assistant']
 keys_keep = ['role', 'content']
-max_length = 500 if st.session_state.guest else 2000
 
 def chat_len(conversations):
     chat_string = ' '.join(c['content'] for c in conversations)
@@ -20,6 +19,7 @@ def chat_len(conversations):
 
 # receiving streaming server-sent events（异步）
 def chat_stream(conversations: list):
+    max_length = 500 if st.session_state.guest else 2000
     chat_history = [{k: c[k] for k in keys_keep}
                     for c in conversations if c['role'] in roles2keep]
     while chat_len(chat_history) > max_length:
@@ -47,6 +47,7 @@ def chat_stream(conversations: list):
 
 @retry(tries=3, delay=1)
 def chat(conversations):
+    max_length = 500 if st.session_state.guest else 2000
     # 过滤
     chat_history = [{k: c[k] for k in keys_keep}
                     for c in conversations if c['role'] in roles2keep]
@@ -78,13 +79,11 @@ def get_response(header, data, queue):
                 print('\n'+'-'*60)
                 return
             try:
-                # Server-sent events are separated by double newline characters
                 key, value = line.decode().split(':', 1)
                 value = json.loads(value.strip())
                 if key == 'data':
                     content = value['choices'][0]['delta'].get('content')
                     if content:
-                        # q.put(content)
                         queue.append(content)
                         print(content, end='')
                 else:
@@ -94,8 +93,6 @@ def get_response(header, data, queue):
     else:
         estring = f'出错啦，请重试: {response.status_code}, {response.reason}'
         print(json.dumps(data, indent=2))
-        # q.put(estring)
-        # q.put(finish_token)
         queue.append(estring)
         queue.append(finish_token)
         return
