@@ -6,10 +6,10 @@ from collections import deque
 
 # 参数
 url = 'https://api.openai.com/v1/chat/completions'
-model = 'gpt-3.5-turbo'
+model = 'gpt-3.5-turbo'  # gpt-3.5-turbo-0301
 temperature = 0.7
 finish_token = 'data: [DONE]'
-roles2keep = ['user', 'assistant']
+roles2keep = ['system', 'user', 'assistant']
 keys_keep = ['role', 'content']
 
 def chat_len(conversations):

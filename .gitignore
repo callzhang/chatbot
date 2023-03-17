@@ -2,3 +2,4 @@ chats/
 .streamlit/secrets.toml
 names.txt
 *.pyc
+.streamlit/bing.cookies
