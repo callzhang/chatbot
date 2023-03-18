@@ -4,7 +4,7 @@ import datetime, os
 
 # create folder
 if not os.path.exists('chats'):
-    os.path.makedirs('chats')
+    os.makedirs('chats')
 
 # init prompt
 init_prompt = [
