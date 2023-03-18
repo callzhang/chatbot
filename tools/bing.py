@@ -2,7 +2,10 @@ import asyncio, pprint
 from EdgeGPT import Chatbot, ConversationStyle
 from collections import deque
 import threading
-from . import chat
+try:
+    from . import chat
+except:
+    import chat
 finish_token = chat.finish_token
 
 

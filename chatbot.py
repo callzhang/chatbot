@@ -44,7 +44,6 @@ if "conversation" not in st.session_state:
         st.session_state.conversation += utils.guest_prompt(st.session_state.name)
     else:
         st.session_state.conversation += utils.staff_prompt(st.session_state.name)
-    print(st.session_state.conversation)
     
 ## UI
 # 对文本输入进行应答

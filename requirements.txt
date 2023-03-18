@@ -4,3 +4,4 @@ retry
 git+https://github.com/callzhang/st-chat.git
 streamlit_extras
 openai
+git+https://github.com/acheong08/EdgeGPT
