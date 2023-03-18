@@ -1,6 +1,10 @@
 import pandas as pd
 import streamlit as st
-import datetime
+import datetime, os
+
+# create folder
+if not os.path.exists('chats'):
+    os.path.makedirs('chats')
 
 # init prompt
 init_prompt = [
