@@ -3,3 +3,4 @@ chats/
 names.txt
 *.pyc
 .streamlit/bing.cookies
+secrets/

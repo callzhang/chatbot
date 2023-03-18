@@ -1,4 +1,4 @@
-import asyncio, pprint
+import asyncio, pprint, logging
 from EdgeGPT import Chatbot, ConversationStyle
 from collections import deque
 import threading
@@ -6,25 +6,30 @@ try:
     from . import chat
 except:
     import chat
-finish_token = chat.finish_token
+    
+from . import utils
 
-
-class BingGPT:
+class BingAI:
     def __init__(self, style: ConversationStyle = ConversationStyle.balanced):
         self.bot = None
         self.style = style
         self.renew()
-        
         
     def __del__(self):
         asyncio.run(self.close())
         
         
     def renew(self):
-        self.bot = Chatbot(cookiePath='.streamlit/bing.cookies')
-        
+        try:
+            self.bot = Chatbot(cookiePath=utils.get_bingai_key())
+        except Exception as e:
+            logging.error(e)
+            
     def is_open(self):
-        return not (self.bot and self.bot.chat_hub.wss and self.bot.chat_hub.wss.closed)
+        try:
+            return not self.bot.chat_hub.wss.closed
+        except:
+            return False
     
     is_alive = property(is_open)
         
@@ -36,8 +41,15 @@ class BingGPT:
         
 
     async def chat_async(self, queue: deque, prompt: str):
-        if not self.is_alive:
+        tried = 0
+        while not self.is_alive:
             self.renew()
+            tried += 1
+            if tried > 1:
+                # 如果仍然不行，则认为账户失效
+                queue.append('BingAI账户失效，请检查！')
+                queue.append(chat.finish_token)
+                return
         message = ''
         async for finished, response in self.bot.ask_stream(prompt):
             if not finished:
@@ -47,7 +59,7 @@ class BingGPT:
                 message = response
             else:
                 print('')
-                queue.append(finish_token)
+                queue.append(chat.finish_token)
                 print('-'*60)
                 # pprint.pprint(response)
                 
@@ -60,6 +72,9 @@ class BingGPT:
         返回一个队列，用于接收对话内容
         返回一个线程，用于运行对话'''
         queue = deque()
+        if not utils.get_bingai_key():
+            queue.append('请先设置BingAI的key')
+            return queue, None
         thread = threading.Thread(target=self.chat_run, args=(queue, prompt))
         thread.start()
         return queue, thread
@@ -74,6 +89,6 @@ class BingGPT:
 
 if __name__ == "__main__":
     queue = deque()
-    bing = BingGPT()
+    bing = BingAI()
     conversation = [{'content': 'Bing GPT的优点是什么？'}]
     queue, thread = bing.chat_stream(conversation)

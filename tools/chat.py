@@ -3,6 +3,7 @@ import requests, json, re
 import streamlit as st
 import threading
 from collections import deque
+from . import utils
 
 # 参数
 url = 'https://api.openai.com/v1/chat/completions'
@@ -35,7 +36,7 @@ def chat_stream(conversations: list):
     }
     header = {
         'Content-Type': 'application/json',
-        'Authorization': f'Bearer {st.secrets.key}'
+        'Authorization': f'Bearer {utils.get_openai_key()}'
     }
     # p = mp.Process(target=get_response, args=(q, header, data))
     thread = threading.Thread(target=get_response, args=(header, data, queue))
@@ -45,27 +46,27 @@ def chat_stream(conversations: list):
 # OpenAI请求(同步)
 
 
-@retry(tries=3, delay=1)
-def chat(conversations):
-    max_length = 500 if st.session_state.guest else 2000
-    # 过滤
-    chat_history = [{k: c[k] for k in keys_keep}
-                    for c in conversations if c['role'] in roles2keep]
-    while chat_len(chat_history) > max_length:
-        chat_history.pop(0)
-    data = {
-        'model': model,
-        'messages': chat_history,
-        # 'temperature': temperature,
-    }
-    header = {
-        'Content-Type': 'application/json',
-        'Authorization': f'Bearer {st.secrets.key}'
-    }
-    res = requests.post(url, headers=header, json=data)
-    choices = res.json()['choices']
-    message = choices[0]['message']
-    return message
+# @retry(tries=3, delay=1)
+# def chat(conversations):
+#     max_length = 500 if st.session_state.guest else 2000
+#     # 过滤
+#     chat_history = [{k: c[k] for k in keys_keep}
+#                     for c in conversations if c['role'] in roles2keep]
+#     while chat_len(chat_history) > max_length:
+#         chat_history.pop(0)
+#     data = {
+#         'model': model,
+#         'messages': chat_history,
+#         # 'temperature': temperature,
+#     }
+#     header = {
+#         'Content-Type': 'application/json',
+#         'Authorization': f'Bearer {utils.get_openai_key()}'
+#     }
+#     res = requests.post(url, headers=header, json=data)
+#     choices = res.json()['choices']
+#     message = choices[0]['message']
+#     return message
 
 
 def get_response(header, data, queue):

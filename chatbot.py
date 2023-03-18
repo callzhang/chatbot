@@ -49,7 +49,7 @@ if "conversation" not in st.session_state:
 # 对文本输入进行应答
 def gen_response():
     task = st.session_state.task
-    if task in ['对话', '文字做图', '信息检索']:
+    if task in ['对话', '文字做图', '信息检索', '文星一言']:
         user_input = st.session_state.input_text
         if user_input == '':
             return
@@ -58,9 +58,8 @@ def gen_response():
         audio_file = st.session_state.get('audio')
         if audio_file:
             user_input = audio_file.name
-    elif task == '文星一言':
-        st.info('文星一言功能暂未开放')
-        return
+    else:
+        raise NotImplementedError(task)
         
     print(f'{st.session_state.name}({task}): {user_input}')
     st.session_state.conversation.append({"role": "user", "content": user_input, "task": task})
@@ -84,15 +83,16 @@ def gen_response():
         st.session_state.conversation.append(bot_response)
     elif task == '信息检索':
         if 'bing' not in st.session_state or not st.session_state.bing.is_alive:
-            logging.warning('BingGPT is not alive, restart it')
-            st.session_state.bing = bing.BingGPT()
+            logging.warning('BingAI is not alive, restart it')
+            st.session_state.bing = bing.BingAI()
+        
         queue, thread = st.session_state.bing.chat_stream(user_input)
         bot_response = {'role': 'assistant', 
                         'content': '', 
                         'queue': queue, 
                         'thread': thread,
                         'start': time.time(),
-                        'model': 'BingGPT'
+                        'model': 'BingAI'
                         }
         response = None
         st.session_state.conversation.append(bot_response)
@@ -135,7 +135,8 @@ def gen_response():
 # 显示对话内容
 def finish_reply(chat):
     t0 = time.time()
-    chat['thread'].join()
+    if chat['thread']:
+        chat['thread'].join()
     logging.info(f'finish reply in {time.time() - t0:.2f}s')
     chat.pop('queue')
     chat.pop('start')
@@ -197,11 +198,17 @@ c1, c2 = st.columns([0.18,0.82])
 with c1:
     task = st.selectbox('选择功能', ['对话', '信息检索', '文星一言', '文字做图', '语音识别'], key='task', disabled=st.session_state.guest)
 with c2:
+    disabled, help = False, '输入你的问题，然后按回车提交。'
+    if task == '文星一言':
+        disabled, help = True, '文星一言功能暂未开放'
+    elif task == '信息检索' and utils.get_bingai_key() is None:
+        disabled, help = True, '请先在设置中填写BingAI的秘钥'
+    
     if task in ['对话', '文字做图', '信息检索', '文星一言']:
-        user_input = st.text_input(label="输入你的问题：", placeholder='输入你的问题，然后按回车提交。',
-                            help='输入你的问题，然后按回车提交。', 
+        user_input = st.text_input(label="输入你的问题：", placeholder=help,
+                            help=help,
                             max_chars=100 if st.session_state.guest else 000,
-                            key='input_text',
+                            key='input_text', disabled=disabled,
                             # label_visibility='collapsed',
                             on_change=gen_response)
     elif task == '语音识别':
@@ -223,7 +230,7 @@ with c1:
 with c2:
     if st.download_button(label='📤', help='导出对话',
                         data=utils.convert_history(st.session_state.conversation), 
-                        file_name=f'history.md', 
+                        file_name=f'history.md',
                         mime='text/markdown'):
         st.success('导出成功！')
 with c3:

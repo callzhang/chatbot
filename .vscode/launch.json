@@ -12,7 +12,7 @@
             "justMyCode": true,
             "args": [
                 "run",
-                "${file}",
+                "chatbot.py",
                 "--server.port",
                 "9044"
             ],
