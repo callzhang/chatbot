@@ -7,7 +7,9 @@ maxUploadSize = 100
 # serverPort = 9045
 
 [theme] 
-primaryColor = "#3A86FF"
+# base="dark"
+primaryColor="purple"
+textColor="#262730"
 
 [client]
 showErrorDetails = true

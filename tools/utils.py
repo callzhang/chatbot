@@ -2,6 +2,8 @@ import pandas as pd
 import streamlit as st
 import datetime, os
 
+WIDE_LAYOUT_THRESHOLD = 400
+
 # create folder
 if not os.path.exists('chats'):
     os.makedirs('chats')

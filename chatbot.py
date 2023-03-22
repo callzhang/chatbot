@@ -6,20 +6,19 @@ import time, datetime, logging
 # from streamlit_extras.colored_header import colored_header
 from streamlit_extras.buy_me_a_coffee import button
 
-WIDE_LAYOUT_THRESHOLD = 400
 
 # 初始化
 st.session_state.guest = True
 if 'layout' not in st.session_state:
     st.session_state.layout = 'centered'
-st.set_page_config(page_title="星尘小助手", page_icon=":star:", 
+st.set_page_config(page_title="💬星尘小助手", page_icon="💬",
                    layout=st.session_state.layout, 
                    initial_sidebar_state="collapsed", menu_items={
              'Get Help': 'https://stardust.ai',
             #  'Report a bug': "https://www.extremelycoolapp.com/bug",
              'About': "# 星尘小助手. \n *仅限员工使用，请勿外传!*"
     })
-st.title("🪐星尘小助手")
+st.title("💬星尘小助手")
 
 # 名字
 with open('names.txt', 'r') as f:
@@ -192,7 +191,7 @@ for i, c in enumerate(st.session_state.conversation):
         raise Exception(c)
 
     # page layout
-    if st.session_state.layout != 'wide' and c['role']=='assistant' and len(c['content']) > WIDE_LAYOUT_THRESHOLD:
+    if st.session_state.layout != 'wide' and c['role']=='assistant' and len(c['content']) > utils.WIDE_LAYOUT_THRESHOLD:
         st.session_state.layout = 'wide'
         st.experimental_rerun()
 
