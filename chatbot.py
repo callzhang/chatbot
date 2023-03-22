@@ -82,8 +82,10 @@ def gen_response():
         response = None
         st.session_state.conversation.append(bot_response)
     elif task == '信息检索':
-        if 'bing' not in st.session_state or not st.session_state.bing.is_alive:
-            logging.warning('BingAI is not alive, restart it')
+        if 'bing' not in st.session_state:
+            logging.warning('Initiating BingAI, please wait...')
+            # show loading
+            st.spinner('正在初始化BingAI')
             st.session_state.bing = bing.BingAI()
         
         queue, thread = st.session_state.bing.chat_stream(user_input)
@@ -166,6 +168,7 @@ for i, c in enumerate(st.session_state.conversation):
             while len(queue):
                 content = queue.popleft()
                 if content == chat.finish_token:
+                    print('finish token received')
                     finish_reply(c)
                     break
                 else:

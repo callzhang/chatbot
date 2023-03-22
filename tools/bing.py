@@ -42,14 +42,14 @@ class BingAI:
 
     async def chat_async(self, queue: deque, prompt: str):
         tried = 0
-        while not self.is_alive:
-            self.renew()
-            tried += 1
-            if tried > 1:
-                # 如果仍然不行，则认为账户失效
-                queue.append('BingAI账户失效，请检查！')
-                queue.append(chat.finish_token)
-                return
+        # while not self.is_alive:
+        #     self.renew()
+        #     tried += 1
+        #     if tried > 1:
+        #         # 如果仍然不行，则认为账户失效
+        #         queue.append('BingAI账户失效，请检查！')
+        #         queue.append(chat.finish_token)
+        #         return
         message = ''
         async for finished, response in self.bot.ask_stream(prompt):
             if not finished:

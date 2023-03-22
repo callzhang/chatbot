@@ -31,7 +31,7 @@ with openai_tab:
         st.experimental_rerun()
         
 with bing_tab:
-    st.warning('BingAI调用方法非官方，可能会导致问题，请酌情使用')
+    st.warning('BingAI调用方法非官方，可能会导致问题，请酌情使用。申请BingAI，请先将小猫咪设置为全局模式，并选择“英国”等非亚洲国家，进入bing.com时需要清空cookies。')
     st.checkbox('BingAI秘钥已保存', value=os.path.exists(bing_key_file))
     bing_instruction = '''### Checking access (Required)
 - Install the latest version of Microsoft Edge
