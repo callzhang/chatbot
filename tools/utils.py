@@ -67,7 +67,6 @@ def get_openai_key():
     if not os.path.exists(openai_key_file):
         return st.secrets.key
     key = json.load(open(openai_key_file, 'r'))['openai_key']
-    print(f'openai_key: {key}')
     return key
 
 
@@ -77,6 +76,5 @@ def get_bingai_key():
     bing_key_file = f'secrets/{st.session_state.name}/bing_key.json'
     if not os.path.exists(bing_key_file):
         return None
-    # print(f'bing_key_file: {json.load(open(bing_key_file, "r"))}')
     print(f'bing_key_file: {bing_key_file}')
     return bing_key_file

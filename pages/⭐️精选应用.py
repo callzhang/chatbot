@@ -3,7 +3,7 @@ from streamlit_card import card
 
 
 st.set_page_config(page_title="精选AI应用", page_icon="⭐️", 
-                   initial_sidebar_state="collapsed", 
+                   initial_sidebar_state="expanded",
                    menu_items={
                     'Get Help': 'https://stardust.ai',
                     'About': "# 精选AI应用. \n *欢迎体验*"
@@ -20,10 +20,23 @@ with c1:
         image="https://saifhassan.info/wp-content/uploads/2016/04/WhatsappPDF.png",
         url="https://www.chatpdf.com/",
     )
+    card(
+        title='文心一言',
+        text='百度打造的AI对话语言大模型，支持中英文',
+        url='https://yiyan.baidu.com/',
+        image='https://pic2.zhimg.com/v2-20257813e0f5669f28aba3a588bf2e0d_r.jpg'
+    )
 with c2:
     card(
         title="DALL-E",
         text="图像生成，OpenAI官方应用",
         image="https://www.saashub.com/images/app/service_logos/166/9vp68kt2omnf/large.png?1609976439",
         url="https://labs.openai.com/",
+    )
+    
+    card(
+        title='CivitAI',
+        text='Civitai is a platform for Stable Diffusion AI Art models.',
+        url='https://civitai.com/',
+        image='https://imagecache.civitai.com/xG1nkqKTMzGDvpLrqFT7WA/9f971e1d-77ae-4d0c-5f4d-1a848a305c00/width=400/00003-845180755-best%20quality,____.png'
     )

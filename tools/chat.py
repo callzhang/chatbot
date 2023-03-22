@@ -4,6 +4,11 @@ import streamlit as st
 import threading
 from collections import deque
 from . import utils
+try:
+    from transformers import AutoTokenizer
+    tokenizer = AutoTokenizer.from_pretrained("gpt2")
+except:
+    pass
 
 # 参数
 url = 'https://api.openai.com/v1/chat/completions'
@@ -15,7 +20,12 @@ keys_keep = ['role', 'content']
 
 def chat_len(conversations):
     chat_string = ' '.join(c['content'] for c in conversations)
-    return len(chat_string)
+    # count tokens
+    try:
+        count = len(tokenizer.encode(chat_string))
+    except:
+        count = len(chat_string)
+    return count
 
 
 # receiving streaming server-sent events（异步）
@@ -23,7 +33,7 @@ def chat_stream(conversations: list):
     max_length = 500 if st.session_state.guest else 2000
     chat_history = [{k: c[k] for k in keys_keep}
                     for c in conversations if c['role'] in roles2keep]
-    while chat_len(chat_history) > max_length:
+    while chat_len(chat_history) > max_length and len(chat_history) > 1:
         chat_history.pop(0)
     print(f'sending conversations rounds: {len(chat_history)}, length:{chat_len(chat_history)}')
     # create a queue to store the responses
