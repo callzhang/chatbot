@@ -1,8 +1,7 @@
 import streamlit as st
 from streamlit_chat import message
 from tools import chat, imagegen, asr, utils, bing
-import pandas as pd
-import time, datetime, logging
+import time, datetime, logging, json, re
 # from streamlit_extras.colored_header import colored_header
 from streamlit_extras.buy_me_a_coffee import button
 
@@ -46,10 +45,15 @@ if "conversation" not in st.session_state:
     
 ## UI
 # 对文本输入进行应答
-def gen_response():
+def gen_response(query=None):
+    # remove suggestion
+    try:
+        st.session_state.conversation[-1].pop('suggestions')
+    except:
+        pass
     task = st.session_state.task
     if task in ['对话', '文字做图', '信息检索', '文星一言']:
-        user_input = st.session_state.input_text
+        user_input = query or st.session_state.input_text
         if user_input == '':
             return
         st.session_state.input_text = ""
@@ -70,11 +74,10 @@ def gen_response():
     
     # response
     if task == '对话':
-        queue, thread = chat.chat_stream(st.session_state.conversation)
+        queue = chat.chat_stream(st.session_state.conversation)
         bot_response = {'role': 'assistant', 
                         'content': '', 
-                        'queue': queue, 
-                        'thread': thread,
+                        'queue': queue,
                         'start': time.time(),
                         'model': 'ChatGPT'
                         }
@@ -133,15 +136,27 @@ def gen_response():
             f.write('-'*50 + '\n')
 
 
+def handle_action(action_token):
+    if action_token == utils.RETRY_TOKEN:
+        bot_response = st.session_state.conversation.pop(-1)
+        assert bot_response['role'] == 'assistant'
+        user_prompt = st.session_state.conversation.pop(-1)
+        assert user_prompt['role'] == 'user'
+        user_input = user_prompt['content']
+        gen_response(query=user_input)
+    else:
+        raise NotImplementedError(action_token)
+
+
 # 显示对话内容
 def finish_reply(chat):
     t0 = time.time()
-    if chat['thread']:
+    if chat.get('thread'):
         chat['thread'].join()
+        chat.pop('thread')
     logging.info(f'finish reply in {time.time() - t0:.2f}s')
     chat.pop('queue')
     chat.pop('start')
-    chat.pop('thread')
     with open(f'chats/{st.session_state.name}.md', 'a') as f:
         response = c['content']
         f.write(f'星尘小助手（{c.get("model")}）: {response}\n\n---\n\n')
@@ -158,28 +173,67 @@ for i, c in enumerate(st.session_state.conversation):
                 avatar_style='initials', seed=st.session_state.name[-2:])
     elif role == "assistant":
         if c.get('start'):
-            queue, thread = c['queue'], c['thread']
+            queue = c['queue']
             # 超时
             if time.time() - c['start'] > 30:
                 c['content'] += '\n\n抱歉出了点问题，请重试...'
+                c['actions'] = {'重试': utils.RETRY_TOKEN}
                 finish_reply(c)
             # 获取数据
             while len(queue):
                 content = queue.popleft()
-                if content == chat.finish_token:
-                    print('finish token received')
+                if content == utils.FINISH_TOKEN:
                     finish_reply(c)
                     break
+                # elif content.startswith(utils.SUGGESTION_TOKEN):
+                #     suggestions = json.loads(content[len(utils.SUGGESTION_TOKEN)+2:])
+                #     c['suggestions'] = suggestions
                 else:
                     c['content'] += content
                     c['start'] = time.time()
                     
             # 渲染
-            message(c['content'], key=str(i), avatar_style='jdenticon')
-            time.sleep(0.3)
+            content = c['content'].replace(utils.SUGGESTION_TOKEN, '')
+            message(content, key=str(i), avatar_style='jdenticon')
+            time.sleep(0.2)
             st.experimental_rerun()
         else:
-            message(c['content'], key=str(i), avatar_style='jdenticon')
+            # 结束
+            content = c['content']
+            suggestions = c.get('suggestions') or []
+            if utils.SUGGESTION_TOKEN in content:
+                pattern1 = r'(\[SUGGESTION\]:\s+)(\[.+\])'
+                pattern2 = r'(-\s|\d.\s)?(.+)'
+                matches = re.findall(pattern1, content)
+                try:
+                    if matches:
+                        for m in matches:
+                            content = content.replace(''.join(m), '')
+                            suggestions += eval(m[1])
+                    else:
+                        content, suggestion_str = re.split(r'\[SUGGESTION\]:\s+', content)
+                        suggestions = re.findall(pattern2, suggestion_str, re.MULTILINE)
+                        suggestions = [s[1] for s in suggestions]
+                    c['content'] = content
+                    c['suggestions'] = suggestions
+                except:
+                    pass
+            message(content, key=str(i), avatar_style='jdenticon')
+            # seggestions
+            if suggestions:
+                # suggestions = [None] + suggestions
+                cols = st.columns(len(suggestions))
+                for col, suggestion in zip(cols, suggestions):
+                    with col:
+                        # if suggestion:
+                            st.button('👉🏻'+suggestion, help=suggestion,
+                                      on_click=gen_response, kwargs={'query': suggestion})
+            
+            # actions: only "retry" is supported
+            actions= c.get('actions')
+            if actions:
+                for action, token in actions.items():
+                    st.button(action, on_click=handle_action, args=(token,))
 
     elif role == 'DALL·E':
         message(c['content'], key=str(i), avatar_style='jdenticon')

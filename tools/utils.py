@@ -3,6 +3,9 @@ import streamlit as st
 import datetime, os
 
 WIDE_LAYOUT_THRESHOLD = 400
+SUGGESTION_TOKEN = '[SUGGESTION]'
+FINISH_TOKEN = 'data: [DONE]'
+RETRY_TOKEN = '[RETRY]'
 
 # create folder
 if not os.path.exists('chats'):
@@ -14,8 +17,10 @@ init_prompt = [
     {"role": "system", "content": "星尘数据（Stardust）成立于2017年5月，公司在北京，是行业领先的数据标注和数据策略公司。星尘数据将专注AI数据技术，通过Autolabeling技术、数据策略专家服务和数据闭环系统服务，为全球人工智能企业特别是自动驾驶行业提供“燃料”，最终实现AI的平民化。"},
 ]
 
+suggestion_prompt = {"role": "system", "content": f'请在你的回答后面给出3个启发性问题，让用户可以通过问题进一步理解该概念，并确保用户能继续追问。启发性问题格式为：{SUGGESTION_TOKEN}: ["问题1", "问题2", "问题3"]'}
+
 staff_prompt = lambda name: [{"role": "assistant", "content": f"你好，{name}，请问有什么可以帮助你？"}]
-guest_prompt = lambda name: [{"role": "system", "content": f'和你对话的是访客，名字为{name}，请用非常精简的方式回答问题。'},
+guest_prompt = lambda name: [{"role": "system", "content": f'用户是访客，名字为{name}，请用非常精简的方式回答问题。'},
                              {'role': 'assistant', 'content': '欢迎您，访客！'}]
 
 

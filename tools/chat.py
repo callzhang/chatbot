@@ -14,7 +14,6 @@ except:
 url = 'https://api.openai.com/v1/chat/completions'
 model = 'gpt-3.5-turbo'  # gpt-3.5-turbo-0301
 temperature = 0.7
-finish_token = 'data: [DONE]'
 roles2keep = ['system', 'user', 'assistant']
 keys_keep = ['role', 'content']
 
@@ -35,6 +34,7 @@ def chat_stream(conversations: list):
                     for c in conversations if c['role'] in roles2keep]
     while chat_len(chat_history) > max_length and len(chat_history) > 1:
         chat_history.pop(0)
+    chat_history.append(utils.suggestion_prompt)
     print(f'sending conversations rounds: {len(chat_history)}, length:{chat_len(chat_history)}')
     # create a queue to store the responses
     queue = deque()
@@ -50,12 +50,12 @@ def chat_stream(conversations: list):
     }
     # p = mp.Process(target=get_response, args=(q, header, data))
     thread = threading.Thread(target=get_response, args=(header, data, queue))
+    thread.daemon = True
     thread.start()
-    return queue, thread
+    return queue
     
-# OpenAI请求(同步)
-
-
+    
+## OpenAI请求(同步)
 # @retry(tries=3, delay=1)
 # def chat(conversations):
 #     max_length = 500 if st.session_state.guest else 2000
@@ -85,8 +85,8 @@ def get_response(header, data, queue):
         for line in response.iter_lines():
             if not line:
                 continue
-            if line == finish_token.encode():
-                queue.append(finish_token)
+            if line == utils.FINISH_TOKEN.encode():
+                queue.append(utils.FINISH_TOKEN)
                 print('\n'+'-'*60)
                 return
             try:
@@ -105,7 +105,7 @@ def get_response(header, data, queue):
         estring = f'出错啦，请重试: {response.status_code}, {response.reason}'
         print(json.dumps(data, indent=2))
         queue.append(estring)
-        queue.append(finish_token)
+        queue.append(utils.FINISH_TOKEN)
         return
 
 

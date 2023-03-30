@@ -1,7 +1,7 @@
 import asyncio, pprint, logging
 from EdgeGPT import Chatbot, ConversationStyle
 from collections import deque
-import threading
+import threading, json
 try:
     from . import chat
 except:
@@ -42,14 +42,14 @@ class BingAI:
 
     async def chat_async(self, queue: deque, prompt: str):
         tried = 0
-        # while not self.is_alive:
-        #     self.renew()
-        #     tried += 1
-        #     if tried > 1:
-        #         # 如果仍然不行，则认为账户失效
-        #         queue.append('BingAI账户失效，请检查！')
-        #         queue.append(chat.finish_token)
-        #         return
+        while not self.bot:
+            self.renew()
+            tried += 1
+            if tried > 2:
+                # 如果仍然不行，则认为账户失效
+                queue.append('BingAI账户失效，请检查！')
+                queue.append(utils.FINISH_TOKEN)
+                return
         message = ''
         async for finished, response in self.bot.ask_stream(prompt):
             if not finished:
@@ -59,9 +59,14 @@ class BingAI:
                 message = response
             else:
                 print('')
-                queue.append(chat.finish_token)
-                print('-'*60)
                 # pprint.pprint(response)
+                suggestions = [r['text'] for r in response['item']
+                               ['messages'][1]['suggestedResponses']]
+                print(f'{utils.SUGGESTION_TOKEN}: {suggestions}')
+                queue.append(f'{utils.SUGGESTION_TOKEN}: {json.dumps(suggestions)}')
+                queue.append(utils.FINISH_TOKEN)
+                print('-'*60)
+                break
                 
     def chat_run(self, queue, prompt):
         asyncio.run(self.chat_async(queue, prompt))
@@ -76,6 +81,7 @@ class BingAI:
             queue.append('请先设置BingAI的key')
             return queue, None
         thread = threading.Thread(target=self.chat_run, args=(queue, prompt))
+        # thread.daemon = True
         thread.start()
         return queue, thread
 
