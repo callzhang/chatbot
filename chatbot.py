@@ -47,12 +47,12 @@ if "conversation" not in st.session_state:
 # 对文本输入进行应答
 def gen_response(query=None):
     # remove suggestion
-    try:
+    if 'suggestions' in st.session_state.conversation[-1]:
         st.session_state.conversation[-1].pop('suggestions')
-    except:
-        pass
+    if 'action' in st.session_state.conversation[-1]:
+        st.session_state.conversation[-1].pop('action')
     task = st.session_state.task
-    if task in ['对话', '文字做图', '信息检索', '文星一言']:
+    if task in ['对话', '文字做图', 'GPT-4', '文心一言']:
         user_input = query or st.session_state.input_text
         if user_input == '':
             return
@@ -83,7 +83,7 @@ def gen_response(query=None):
                         }
         response = None
         st.session_state.conversation.append(bot_response)
-    elif task == '信息检索':
+    elif task == 'GPT-4':
         if 'bing' not in st.session_state:
             logging.warning('Initiating BingAI, please wait...')
             # show loading
@@ -139,11 +139,11 @@ def gen_response(query=None):
 def handle_action(action_token):
     if action_token == utils.RETRY_TOKEN:
         bot_response = st.session_state.conversation.pop(-1)
-        assert bot_response['role'] == 'assistant'
         user_prompt = st.session_state.conversation.pop(-1)
-        assert user_prompt['role'] == 'user'
-        user_input = user_prompt['content']
-        gen_response(query=user_input)
+        if bot_response['role'] == 'assistant' \
+            and user_prompt['role'] == 'user':
+            user_input = user_prompt['content']
+            gen_response(query=user_input)
     else:
         raise NotImplementedError(action_token)
 
@@ -173,36 +173,35 @@ for i, c in enumerate(st.session_state.conversation):
                 avatar_style='initials', seed=st.session_state.name[-2:])
     elif role == "assistant":
         if c.get('start'):
-            queue = c['queue']
-            # 超时
-            if time.time() - c['start'] > 30:
-                c['content'] += '\n\n抱歉出了点问题，请重试...'
-                c['actions'] = {'重试': utils.RETRY_TOKEN}
-                finish_reply(c)
+            queue = c.get('queue')
             # 获取数据
-            while len(queue):
+            while queue is not None and len(queue):
                 content = queue.popleft()
                 if content == utils.FINISH_TOKEN:
                     finish_reply(c)
-                    break
-                # elif content.startswith(utils.SUGGESTION_TOKEN):
-                #     suggestions = json.loads(content[len(utils.SUGGESTION_TOKEN)+2:])
-                #     c['suggestions'] = suggestions
+                    st.experimental_rerun()
                 else:
                     c['content'] += content
                     c['start'] = time.time()
-                    
+
+            # 超时
+            if time.time() - c['start'] > utils.TIMEOUT:
+                c['content'] += '\n\n抱歉出了点问题，请重试...'
+                c['actions'] = {'重试': utils.RETRY_TOKEN}
+                finish_reply(c)
+                
             # 渲染
             content = c['content'].replace(utils.SUGGESTION_TOKEN, '')
             message(content, key=str(i), avatar_style='jdenticon')
-            time.sleep(0.2)
+            time.sleep(0.5)
             st.experimental_rerun()
         else:
             # 结束
             content = c['content']
             suggestions = c.get('suggestions') or []
+            # suggestion
             if utils.SUGGESTION_TOKEN in content:
-                pattern1 = r'(\[SUGGESTION\]:\s+)(\[.+\])'
+                pattern1 = r'(\[?SUGGESTION\]?:.*)(\[.+\])'
                 pattern2 = r'(-\s|\d.\s)?(.+)'
                 matches = re.findall(pattern1, content)
                 try:
@@ -217,7 +216,7 @@ for i, c in enumerate(st.session_state.conversation):
                     c['content'] = content
                     c['suggestions'] = suggestions
                 except:
-                    pass
+                    logging.error('Error parsing suggestion:', content)
             message(content, key=str(i), avatar_style='jdenticon')
             # seggestions
             if suggestions:
@@ -226,7 +225,7 @@ for i, c in enumerate(st.session_state.conversation):
                 for col, suggestion in zip(cols, suggestions):
                     with col:
                         # if suggestion:
-                            st.button('👉🏻'+suggestion, help=suggestion,
+                            st.button('👉🏻'+suggestion[:50], help=suggestion,
                                       on_click=gen_response, kwargs={'query': suggestion})
             
             # actions: only "retry" is supported
@@ -252,15 +251,15 @@ for i, c in enumerate(st.session_state.conversation):
 # 添加文本输入框
 c1, c2 = st.columns([0.18,0.82])
 with c1:
-    task = st.selectbox('选择功能', ['对话', '信息检索', '文星一言', '文字做图', '语音识别'], key='task', disabled=st.session_state.guest)
+    task = st.selectbox('选择功能', ['对话', 'GPT-4', '文字做图', '语音识别'], key='task', disabled=st.session_state.guest)
 with c2:
     disabled, help = False, '输入你的问题，然后按回车提交。'
-    if task == '文星一言':
-        disabled, help = True, '文星一言功能暂未开放'
-    elif task == '信息检索' and utils.get_bingai_key() is None:
+    if task == '文心一言':
+        disabled, help = True, '文心一言功能暂未开放'
+    elif task == 'GPT-4' and utils.get_bingai_key() is None:
         disabled, help = True, '请先在设置中填写BingAI的秘钥'
     
-    if task in ['对话', '文字做图', '信息检索', '文星一言']:
+    if task in ['对话', '文字做图', 'GPT-4', '文心一言']:
         user_input = st.text_input(label="输入你的问题：", placeholder=help,
                             help=help,
                             max_chars=100 if st.session_state.guest else 000,

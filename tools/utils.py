@@ -6,6 +6,7 @@ WIDE_LAYOUT_THRESHOLD = 400
 SUGGESTION_TOKEN = '[SUGGESTION]'
 FINISH_TOKEN = 'data: [DONE]'
 RETRY_TOKEN = '[RETRY]'
+TIMEOUT = 30
 
 # create folder
 if not os.path.exists('chats'):
@@ -67,6 +68,7 @@ def url2html(urls):
 
 ## 管理秘钥
 import json
+@st.cache(ttl=600)
 def get_openai_key():
     if not st.session_state.get('name'):
         return st.secrets.key
@@ -76,7 +78,7 @@ def get_openai_key():
     key = json.load(open(openai_key_file, 'r'))['openai_key']
     return key
 
-
+@st.cache(ttl=600)
 def get_bingai_key():
     if not st.session_state.get('name'):
         return None

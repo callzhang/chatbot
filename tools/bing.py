@@ -23,15 +23,8 @@ class BingAI:
         try:
             self.bot = Chatbot(cookiePath=utils.get_bingai_key())
         except Exception as e:
-            logging.error(e)
+            logging.error(f'创建bing实例出错：\n{e}')
             
-    def is_open(self):
-        try:
-            return not self.bot.chat_hub.wss.closed
-        except:
-            return False
-    
-    is_alive = property(is_open)
         
     async def chat(self):
         if not self.is_alive:
