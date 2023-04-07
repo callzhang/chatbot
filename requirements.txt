@@ -9,3 +9,4 @@ openai
 git+https://github.com/acheong08/EdgeGPT
 transformers
 gradio
+shillelagh[all]

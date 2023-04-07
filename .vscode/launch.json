@@ -5,11 +5,19 @@
     "version": "0.2.0",
     "configurations": [
         {
+            "name": "Gradio",
+            "type": "python",
+            "request": "launch",
+            "program": "chatbot_v2.py",
+            "console": "integratedTerminal",
+            "justMyCode": false
+        },
+        {
             "name": "streamlit",
             "type": "python",
             "request": "launch",
             "module": "streamlit",
-            "justMyCode": false,
+            "justMyCode": true,
             "args": [
                 "run",
                 "chatbot.py",
