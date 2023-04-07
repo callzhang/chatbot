@@ -1,6 +1,7 @@
 import pandas as pd
-import streamlit as st
-import datetime, os
+# import streamlit as st
+import datetime, os, re, logging
+from functools import cache
 
 WIDE_LAYOUT_THRESHOLD = 400
 SUGGESTION_TOKEN = '[SUGGESTION]'
@@ -27,17 +28,17 @@ guest_prompt = lambda name: [{"role": "system", "content": f'用户是访客，�
 
 
 # 导出对话内容
-def convert_history(conversation):
+def convert_history(conversation, name):
     history = pd.DataFrame(conversation).query('role not in ["system", "audio"]')
     # export markdown
-    md_formated = f"""# {st.session_state.name}的对话记录
+    md_formated = f"""# {name}的对话记录
 ## 日期：{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n
 ---
 """
     for i, c in history.iterrows():
         role, content, task, model = c['role'], c['content'], c.get('task'), c.get('model')
         if role == "user":
-            md_formated += f"""**{st.session_state.name}({task}): {content}**\n\n"""
+            md_formated += f"""**{name}({task}): {content}**\n\n"""
         elif role in ["assistant"]:
             md_formated += f"""星尘小助手({model}): {content}\n\n"""
         elif role == "DALL·E":
@@ -66,24 +67,71 @@ def url2html(urls):
     return html_tags
 
 
+## 处理提示
+def parse_suggestions(content:str):
+    suggestions = []
+    if SUGGESTION_TOKEN in content:
+        pattern1 = r'(\[?SUGGESTION\]?:.*)(\[.+\])'
+        pattern2 = r'(-\s|\d.\s)?(.+)'
+        matches = re.findall(pattern1, content)
+        try:
+            if matches:
+                for m in matches:
+                    content = content.replace(''.join(m), '')
+                    suggestions += eval(m[1])
+            else:
+                content, suggestion_str = re.split(r'\[SUGGESTION\]:\s+', content)
+                suggestions = re.findall(pattern2, suggestion_str, re.MULTILINE)
+                suggestions = [s[1] for s in suggestions]
+        except:
+            logging.error('Error parsing suggestion:', content)
+    return content, suggestions
+
+def filter_suggestion(content:str):
+    pattern = r'\[?SUGGESTION\].*$'
+    content = '\n'.join(re.split(pattern, content, re.MULTILINE))
+    return content
+
 ## 管理秘钥
-import json
-@st.cache(ttl=600)
-def get_openai_key():
-    if not st.session_state.get('name'):
-        return st.secrets.key
-    openai_key_file = f'secrets/{st.session_state.name}/openai_key.json'
-    if not os.path.exists(openai_key_file):
-        return st.secrets.key
+import json, toml
+@cache
+def default_key():
+    with open('.streamlit/secrets.toml', 'r') as f:
+        data = toml.load(f)
+    return data['key']
+
+@cache
+def get_openai_key(username):
+    openai_key_file = f'secrets/{username}/openai_key.json'
+    if not username or not os.path.exists(openai_key_file):
+        return default_key()
     key = json.load(open(openai_key_file, 'r'))['openai_key']
     return key
 
-@st.cache(ttl=600)
-def get_bingai_key():
-    if not st.session_state.get('name'):
-        return None
-    bing_key_file = f'secrets/{st.session_state.name}/bing_key.json'
-    if not os.path.exists(bing_key_file):
+@cache
+def get_bingai_key(username):
+    bing_key_file = f'secrets/{username}/bing_key.json'
+    if not username or not os.path.exists(bing_key_file):
         return None
     print(f'bing_key_file: {bing_key_file}')
     return bing_key_file
+
+# user
+sheet_url = st.secrets["public_gsheets_url"]
+from shillelagh.backends.apsw.db import connect
+
+@cache
+def get_db():
+    print('connecting to google sheet...')
+    conn = connect(":memory:")
+    cursor = conn.cursor()
+    query = f'SELECT * FROM "{sheet_url}"'
+    rows = cursor.execute(query)
+    rows = rows.fetchall()
+    df = pd.DataFrame(rows, columns=['姓名', '访问码', '截止日期'])
+    print(f'Fetched {len(df)} records')
+    return df
+
+if __name__ == '__main__':
+    db = get_db()
+    print(db)

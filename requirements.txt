@@ -1,8 +1,11 @@
 markdown
 retry
+streamlit
+# git+h÷ttps://github.com/streamlit/streamlit.git@1.21.0
 # streamlit_chat
 git+https://github.com/callzhang/st-chat.git
 streamlit_extras
 openai
 git+https://github.com/acheong08/EdgeGPT
 transformers
+gradio

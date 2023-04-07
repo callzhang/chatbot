@@ -1,6 +1,6 @@
 from retry import retry
 import requests, json, re
-import streamlit as st
+# import streamlit as st
 import threading
 from collections import deque
 from . import utils
@@ -27,9 +27,30 @@ def chat_len(conversations):
     return count
 
 
+# def chat2history(chat: List[List]) -> List:
+#     history = utils.init_prompt
+#     for c in chat:
+#         history.append({'role': 'user', 'content': c[0]})
+#         history.append({'role': 'assistant', 'content': c[1]})
+#     history.append(utils.suggestion_prompt)
+#     return history
+
+def history2chat(history:list[dict]) -> list[list]:
+    chatbot = []
+    roles = ['user', 'assistant']
+    history_ = [c for c in history if c['role'] in roles]
+    for i, chat in enumerate(history_):
+        if i % 2 == 0:
+            chatbot.append([None, None])
+        if chat['role'] == roles[0]:
+            chatbot[i//2][0] = chat['content']
+        elif chat['role'] == roles[1]:
+            chatbot[i//2][1] = chat['content']
+    return chatbot
+
 # receiving streaming server-sent events（异步）
-def chat_stream(conversations: list):
-    max_length = 500 if st.session_state.guest else 2000
+def chat_stream(conversations:list, username:str):
+    max_length = 500 #if st.session_state.guest else 2000
     chat_history = [{k: c[k] for k in keys_keep}
                     for c in conversations if c['role'] in roles2keep]
     while chat_len(chat_history) > max_length and len(chat_history) > 1:
@@ -46,7 +67,7 @@ def chat_stream(conversations: list):
     }
     header = {
         'Content-Type': 'application/json',
-        'Authorization': f'Bearer {utils.get_openai_key()}'
+        'Authorization': f'Bearer {utils.get_openai_key(username)}'
     }
     # p = mp.Process(target=get_response, args=(q, header, data))
     thread = threading.Thread(target=get_response, args=(header, data, queue))

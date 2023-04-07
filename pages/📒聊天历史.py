@@ -8,7 +8,7 @@ if 'name' not in st.session_state:
     st.stop()
 
 # cached function to get history
-@st.cache(ttl=600)  # update every 10 minute
+@st.cache(ttl=600, suppress_st_warning=True)  # update every 10 minute
 def get_history(history_file):
     if os.path.exists(history_file):
         with open(f'chats/{st.session_state.name}.md', 'r') as f:
@@ -38,7 +38,7 @@ if not chat_history:
     st.info('暂无历史记录')
     st.stop()
 
-print(f'dates: {chat_history.keys()}')
+# print(f'dates: {chat_history.keys()}')
 current_page = st.selectbox('选择日期', dates, 0)
 print(f'selected {current_page}')
 # display chat in current page

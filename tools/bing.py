@@ -10,9 +10,10 @@ except:
 from . import utils
 
 class BingAI:
-    def __init__(self, style: ConversationStyle = ConversationStyle.balanced):
+    def __init__(self, name, style: ConversationStyle = ConversationStyle.balanced):
         self.bot = None
         self.style = style
+        self.name = name
         self.renew()
         
     def __del__(self):
@@ -21,7 +22,7 @@ class BingAI:
         
     def renew(self):
         try:
-            self.bot = Chatbot(cookiePath=utils.get_bingai_key())
+            self.bot = Chatbot(cookiePath=utils.get_bingai_key(self.name))
         except Exception as e:
             logging.error(f'创建bing实例出错：\n{e}')
             
@@ -70,9 +71,6 @@ class BingAI:
         返回一个队列，用于接收对话内容
         返回一个线程，用于运行对话'''
         queue = deque()
-        if not utils.get_bingai_key():
-            queue.append('请先设置BingAI的key')
-            return queue, None
         thread = threading.Thread(target=self.chat_run, args=(queue, prompt))
         # thread.daemon = True
         thread.start()

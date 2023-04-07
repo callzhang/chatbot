@@ -7,7 +7,6 @@ from streamlit_extras.buy_me_a_coffee import button
 
 
 # 初始化
-st.session_state.guest = True
 if 'layout' not in st.session_state:
     st.session_state.layout = 'centered'
 st.set_page_config(page_title="💬星尘小助手", page_icon="💬",
@@ -20,19 +19,26 @@ st.set_page_config(page_title="💬星尘小助手", page_icon="💬",
 st.title("💬星尘小助手")
 
 # 名字
-with open('names.txt', 'r') as f:
-    names = [n.strip() for n in f.readlines()]
+# with open('names.txt', 'r') as f:
+#     names = [n.strip() for n in f.readlines()]
+user_db = utils.get_db()
+
 
 if 'name' not in st.session_state:
+    st.session_state.guest = True
     st.warning('本系统需要消耗计算资源，特别是图片和语音功能；请适度体验AI的能力，尽量用在工作相关内容上😊')
-    name = st.text_input('请输入你的名字', key='my_name', help='仅限员工使用，请勿外传！')
-    if name:
-        st.session_state.name = name
+    code = st.text_input('请输入你的访问码', key='my_name', help='仅限员工使用，请勿外传！')
+    if code:
+        access_data = user_db.query('访问码==@code')
+        if len(access_data):
+            st.session_state.name = access_data['姓名'].iloc[0]
+            expiration = access_data['截止日期'].iloc[0]
+            if datetime.datetime.now().date() < expiration:
+                st.session_state.guest = False
+        else:
+            st.session_state.name = '访客'
         st.experimental_rerun()
     st.stop()
-
-if st.session_state.name in names:
-    st.session_state.guest = False
     
 
 # 定义一个列表，用于保存对话内容。role：system，user，assistant
@@ -74,7 +80,7 @@ def gen_response(query=None):
     
     # response
     if task == '对话':
-        queue = chat.chat_stream(st.session_state.conversation)
+        queue = chat.chat_stream(st.session_state.conversation, st.session_state.name)
         bot_response = {'role': 'assistant', 
                         'content': '', 
                         'queue': queue,
@@ -88,7 +94,7 @@ def gen_response(query=None):
             logging.warning('Initiating BingAI, please wait...')
             # show loading
             st.spinner('正在初始化BingAI')
-            st.session_state.bing = bing.BingAI()
+            st.session_state.bing = bing.BingAI(name=st.session_state.name)
         
         queue, thread = st.session_state.bing.chat_stream(user_input)
         bot_response = {'role': 'assistant', 
@@ -200,23 +206,10 @@ for i, c in enumerate(st.session_state.conversation):
             content = c['content']
             suggestions = c.get('suggestions') or []
             # suggestion
-            if utils.SUGGESTION_TOKEN in content:
-                pattern1 = r'(\[?SUGGESTION\]?:.*)(\[.+\])'
-                pattern2 = r'(-\s|\d.\s)?(.+)'
-                matches = re.findall(pattern1, content)
-                try:
-                    if matches:
-                        for m in matches:
-                            content = content.replace(''.join(m), '')
-                            suggestions += eval(m[1])
-                    else:
-                        content, suggestion_str = re.split(r'\[SUGGESTION\]:\s+', content)
-                        suggestions = re.findall(pattern2, suggestion_str, re.MULTILINE)
-                        suggestions = [s[1] for s in suggestions]
-                    c['content'] = content
-                    c['suggestions'] = suggestions
-                except:
-                    logging.error('Error parsing suggestion:', content)
+            if not suggestions:
+                content, suggestions = utils.parse_suggestions(content)
+                c['content'] = content
+                c['suggestions'] = suggestions
             message(content, key=str(i), avatar_style='jdenticon')
             # seggestions
             if suggestions:
@@ -256,7 +249,7 @@ with c2:
     disabled, help = False, '输入你的问题，然后按回车提交。'
     if task == '文心一言':
         disabled, help = True, '文心一言功能暂未开放'
-    elif task == 'GPT-4' and utils.get_bingai_key() is None:
+    elif task == 'GPT-4' and utils.get_bingai_key(st.session_state.name) is None:
         disabled, help = True, '请先在设置中填写BingAI的秘钥'
     
     if task in ['对话', '文字做图', 'GPT-4', '文心一言']:
@@ -284,7 +277,7 @@ with c1:
         st.experimental_rerun()
 with c2:
     if st.download_button(label='📤', help='导出对话',
-                        data=utils.convert_history(st.session_state.conversation), 
+                        data=utils.convert_history(st.session_state.conversation, st.session_state.name), 
                         file_name=f'history.md',
                         mime='text/markdown'):
         st.success('导出成功！')
