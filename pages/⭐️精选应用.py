@@ -26,6 +26,12 @@ with c1:
         url='https://yiyan.baidu.com/',
         image='https://pic2.zhimg.com/v2-20257813e0f5669f28aba3a588bf2e0d_r.jpg'
     )
+    card(
+        title='AssemblyAI',
+        text='Conformer-1是一种最先进的语音识别模型，实现了接近人类水平的性能和鲁棒性。',
+        url='https://www.assemblyai.com/playground/source',
+        image='https://lh4.googleusercontent.com/pw6VHzWKgDZHeSMY2GKceYs3-xPyF4K4LVjgCSpm9wR2WOaki08jSGJtxdjr5Uh4UvwcuePl65_LXYDgSleBnVCojkGmApwZJCv7dW2Lj7gIbKza71jhlQdJgVDL2SJZ4nTaGZcfNsPISG8'
+    )
 with c2:
     card(
         title="DALL-E",
@@ -33,10 +39,15 @@ with c2:
         image="https://www.saashub.com/images/app/service_logos/166/9vp68kt2omnf/large.png?1609976439",
         url="https://labs.openai.com/",
     )
-    
     card(
         title='CivitAI',
         text='Civitai is a platform for Stable Diffusion AI Art models.',
         url='https://civitai.com/',
-        image='https://imagecache.civitai.com/xG1nkqKTMzGDvpLrqFT7WA/9f971e1d-77ae-4d0c-5f4d-1a848a305c00/width=400/00003-845180755-best%20quality,____.png'
+        image='https://tengyart.ru/wp-content/uploads/2023/03/chto-takoe-civitai.jpg'
+    )
+    card(
+        title='poe.com',
+        text='Poe 是一个让你与各种人工智能机器人进行对话的应用，其中包括付费订阅机器人和免费机器人。',
+        url='https://poe.com',
+        image='https://www.ermalalibali.com/wp-content/uploads/2023/04/poe.com-logo.png'
     )
