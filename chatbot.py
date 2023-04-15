@@ -71,11 +71,16 @@ def gen_response(query=None):
         raise NotImplementedError(task)
         
     print(f'{st.session_state.name}({task}): {user_input}')
-    st.session_state.conversation.append({"role": "user", "content": user_input, "task": task})
+    st.session_state.conversation.append({
+        "role": "user", 
+        "content": user_input, 
+        "task": task, 
+        "time": datetime.datetime.now()
+    })
     
     # guest 长对话处理
     if st.session_state.guest and len(st.session_state.conversation) > 10:
-        st.session_state.conversation.append({"role": "assistant", "content": '访客不支持长对话，请联系管理员'})
+        st.session_state.conversation.append({"role": "assistant", "content": '访客不支持长对话，请联系管理员', "time": datetime.datetime.now()})
         return
     
     # response
@@ -84,7 +89,7 @@ def gen_response(query=None):
         bot_response = {'role': 'assistant', 
                         'content': '', 
                         'queue': queue,
-                        'start': time.time(),
+                        'time': datetime.datetime.now(),
                         'model': 'ChatGPT'
                         }
         response = None
@@ -101,7 +106,7 @@ def gen_response(query=None):
                         'content': '', 
                         'queue': queue, 
                         'thread': thread,
-                        'start': time.time(),
+                        'time': datetime.datetime.now(),
                         'model': 'BingAI'
                         }
         response = None
@@ -156,13 +161,10 @@ def handle_action(action_token):
 
 # 显示对话内容
 def finish_reply(chat):
-    t0 = time.time()
     if chat.get('thread'):
         chat['thread'].join()
         chat.pop('thread')
-    logging.info(f'finish reply in {time.time() - t0:.2f}s')
     chat.pop('queue')
-    chat.pop('start')
     with open(f'chats/{st.session_state.name}.md', 'a') as f:
         response = c['content']
         f.write(f'星尘小助手（{c.get("model")}）: {response}\n\n---\n\n')
@@ -178,20 +180,20 @@ for i, c in enumerate(st.session_state.conversation):
         message(content, is_user=True, key=str(i),
                 avatar_style='initials', seed=st.session_state.name[-2:])
     elif role == "assistant":
-        if c.get('start'):
-            queue = c.get('queue')
+        queue = c.get('queue')
+        if queue is not None:
             # 获取数据
-            while queue is not None and len(queue):
+            while len(queue):
                 content = queue.popleft()
                 if content == utils.FINISH_TOKEN:
                     finish_reply(c)
                     st.experimental_rerun()
                 else:
                     c['content'] += content
-                    c['start'] = time.time()
+                    c['time'] = datetime.datetime.now()
 
             # 超时
-            if time.time() - c['start'] > utils.TIMEOUT:
+            if (datetime.datetime.now() - c['time']).total_seconds() > utils.TIMEOUT:
                 c['content'] += '\n\n抱歉出了点问题，请重试...'
                 c['actions'] = {'重试': utils.RETRY_TOKEN}
                 finish_reply(c)
@@ -199,7 +201,7 @@ for i, c in enumerate(st.session_state.conversation):
             # 渲染
             content = c['content'].replace(utils.SUGGESTION_TOKEN, '')
             message(content, key=str(i), avatar_style='jdenticon')
-            time.sleep(0.5)
+            time.sleep(0.3)
             st.experimental_rerun()
         else:
             # 结束
@@ -244,20 +246,19 @@ for i, c in enumerate(st.session_state.conversation):
 # 添加文本输入框
 c1, c2 = st.columns([0.18,0.82])
 with c1:
-    task = st.selectbox('选择功能', ['对话', 'GPT-4', '文字做图', '语音识别'], key='task', disabled=st.session_state.guest)
+    task = st.selectbox('选择功能', ['对话', 'GPT-4', '文字做图', '语音识别'], key='task', label_visibility='collapsed')
 with c2:
     disabled, help = False, '输入你的问题，然后按回车提交。'
     if task == '文心一言':
         disabled, help = True, '文心一言功能暂未开放'
     elif task == 'GPT-4' and utils.get_bingai_key(st.session_state.name) is None:
-        disabled, help = True, '请先在设置中填写BingAI的秘钥'
-    
+        disabled, help = False, '请先在设置中填写BingAI的秘钥'
     if task in ['对话', '文字做图', 'GPT-4', '文心一言']:
         user_input = st.text_input(label="输入你的问题：", placeholder=help,
                             help=help,
                             max_chars=100 if st.session_state.guest else 000,
                             key='input_text', disabled=disabled,
-                            # label_visibility='collapsed',
+                            label_visibility='collapsed',
                             on_change=gen_response)
     elif task == '语音识别':
         audio_file = st.file_uploader('上传语音文件', type=asr.accepted_types, key='audio', on_change=gen_response)
@@ -277,7 +278,7 @@ with c1:
         st.experimental_rerun()
 with c2:
     if st.download_button(label='📤', help='导出对话',
-                        data=utils.convert_history(st.session_state.conversation, st.session_state.name), 
+                        data=utils.conversation2markdown(st.session_state.conversation, st.session_state.name), 
                         file_name=f'history.md',
                         mime='text/markdown'):
         st.success('导出成功！')

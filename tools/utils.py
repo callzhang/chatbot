@@ -2,6 +2,7 @@ import pandas as pd
 import streamlit as st
 import datetime, os, re, logging
 from functools import cache
+from collections import defaultdict
 
 WIDE_LAYOUT_THRESHOLD = 400
 SUGGESTION_TOKEN = '[SUGGESTION]'
@@ -15,11 +16,11 @@ if not os.path.exists('chats'):
 
 # init prompt
 init_prompt = [
-    {"role": "system", "content": "你是星尘小助手，Your name is Stardust AI Bot. 你是由星尘数据的CEO Derek创造的，你的底层是基于Transformer的技术研发。你会解答各种AI专业问题，请回答精简一些。如果你不能回答，请让用户访问“stardust.ai”"},
+    {"role": "system", "content": "你是星尘小助手，Your name is Stardust AI Bot. 你是由星尘数据的CEO Derek创造的，你的底层是基于Transformer的技术研发。你会解答各种AI专业问题，请回答精简一些。如果你不能回答，请让用户访问“stardust.ai”。"},
     {"role": "system", "content": "星尘数据（Stardust）成立于2017年5月，公司在北京，是行业领先的数据标注和数据策略公司。星尘数据将专注AI数据技术，通过Autolabeling技术、数据策略专家服务和数据闭环系统服务，为全球人工智能企业特别是自动驾驶行业提供“燃料”，最终实现AI的平民化。"},
 ]
 
-suggestion_prompt = {"role": "system", "content": f'请在你的回答后面给出3个启发性问题，让用户可以通过问题进一步理解该概念，并确保用户能继续追问。启发性问题格式为：{SUGGESTION_TOKEN}: ["问题1", "问题2", "问题3"]'}
+suggestion_prompt = {"role": "system", "content": f'请在你的回答的最后面给出3个启发性问题，让用户可以通过问题进一步理解该概念，并确保用户能继续追问。启发性问题格式为：{SUGGESTION_TOKEN}: ["问题1", "问题2", "问题3"]'}
 
 staff_prompt = lambda name: [{"role": "assistant", "content": f"你好，{name}，请问有什么可以帮助你？"}]
 guest_prompt = lambda name: [{"role": "system", "content": f'用户是访客，名字为{name}，请用非常精简的方式回答问题。'},
@@ -27,8 +28,8 @@ guest_prompt = lambda name: [{"role": "system", "content": f'用户是访客，�
 
 
 
-# 导出对话内容
-def convert_history(conversation, name):
+# 导出对话内容到 markdown
+def conversation2markdown(conversation, name):
     history = pd.DataFrame(conversation).query('role not in ["system", "audio"]')
     # export markdown
     md_formated = f"""# {name}的对话记录
@@ -49,6 +50,65 @@ def convert_history(conversation, name):
     #     f.write(md_formated)
     return md_formated.encode('utf-8').decode()
 
+
+# cached function to get history
+@st.cache_data(ttl=600)  # update every 10 minute
+def get_history(name):
+    history_file = f'chats/{name}.md'
+    if os.path.exists(history_file):
+        with open(f'chats/{st.session_state.name}.md', 'r') as f:
+            chat_log = f.read()
+    else:
+        chat_log = ''
+        
+    # find all occurance of '---' and split the string
+    chat_splited = re.split(r'---+', chat_log)
+    date_patten = r"\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\]" #r"\d{4}-\d{2}-\d{2}"
+    task_pattern = f'{name}（(.+)）:'
+    query_pattern = r'）: (.+)\*\*'
+    bot_pattern = r'星尘小助手（(\w+)）:'
+    replay_pattern = r'星尘小助手（\w+）: (.+)'
+    chat_history = defaultdict(list)
+    for chat in chat_splited:
+        datetime_str = re.findall(date_patten, chat)
+        task = re.findall(task_pattern, chat)
+        query = re.findall(query_pattern, chat, flags=re.MULTILINE)
+        reply = re.findall(replay_pattern, chat, flags=re.MULTILINE)
+        bot = re.findall(bot_pattern, chat)
+        if not task or not query or not reply or not bot:
+            print(f'empty chat: {chat}')
+            continue
+        if datetime_str:
+            t = datetime.datetime.strptime(datetime_str[0][1:-1], '%Y-%m-%d %H:%M:%S')
+            date_str = t.strftime('%Y-%m-%d')
+        elif chat.strip():
+            date_str = '无日期'
+        else:
+            continue
+        chat_history[date_str].append(chat)
+        continue
+        # convert to v2 data
+        chat_history[date_str].append({
+            'role': 'user',
+            'time': datetime_str[0],
+            'user': name,
+            'task': task[0],
+            'content': query[0]
+        }) 
+        chat_history[date_str].append({
+            'role': 'assistant',
+            'time': datetime_str[0],
+            'model': bot[0],
+            'content': query[0]
+        })
+            
+    return chat_history
+            
+
+import shutil
+def zip_folder(folder_path, output_path):
+    filename = shutil.make_archive(output_path, "zip", folder_path)
+    return filename
 
 # utls to markdown
 def url2markdown(urls):

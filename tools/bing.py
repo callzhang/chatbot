@@ -56,11 +56,12 @@ class BingAI:
                 # pprint.pprint(response)
                 suggestions = [r['text'] for r in response['item']
                                ['messages'][1]['suggestedResponses']]
-                print(f'{utils.SUGGESTION_TOKEN}: {suggestions}')
+                print(f'{utils.SUGGESTION_TOKEN}:  {suggestions}')
                 queue.append(f'{utils.SUGGESTION_TOKEN}: {json.dumps(suggestions)}')
                 queue.append(utils.FINISH_TOKEN)
                 print('-'*60)
                 break
+        self.close()
                 
     def chat_run(self, queue, prompt):
         asyncio.run(self.chat_async(queue, prompt))
@@ -72,7 +73,7 @@ class BingAI:
         返回一个线程，用于运行对话'''
         queue = deque()
         thread = threading.Thread(target=self.chat_run, args=(queue, prompt))
-        # thread.daemon = True
+        thread.daemon = True
         thread.start()
         return queue, thread
 
