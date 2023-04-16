@@ -1,6 +1,6 @@
-import streamlit as st
+import streamlit as st, pandas as pd
 from streamlit_chat import message
-from tools import chat, imagegen, asr, utils, bing
+from tools import imagegen, asr, openai, utils, bing
 import time, datetime, logging, json, re
 # from streamlit_extras.colored_header import colored_header
 from streamlit_extras.buy_me_a_coffee import button
@@ -18,9 +18,6 @@ st.set_page_config(page_title="💬星尘小助手", page_icon="💬",
     })
 st.title("💬星尘小助手")
 
-# 名字
-# with open('names.txt', 'r') as f:
-#     names = [n.strip() for n in f.readlines()]
 user_db = utils.get_db()
 
 
@@ -40,15 +37,41 @@ if 'name' not in st.session_state:
         st.experimental_rerun()
     st.stop()
     
-
-# 定义一个列表，用于保存对话内容。role：system，user，assistant
+## dialog history management
+# history: 所有对话标题的索引，[time, title, file]
+# conversation: 对话的具体内容列表，[{role, name, time, content, suggestion},...]
 if "conversation" not in st.session_state:
-    st.session_state.conversation = utils.init_prompt.copy()
-    if st.session_state.guest:
-        st.session_state.conversation += utils.guest_prompt(st.session_state.name)
+    chat_history = utils.get_chat_history(st.session_state.name).sort_values('time', ascending=False)
+    # 初始化当前对话
+    st.session_state.chat_titles = chat_history['title'].tolist()
+    if len(st.session_state.chat_titles):
+        if 'chat_title_selection' in st.session_state:
+            # get selection from sidebar
+            selected_title = st.session_state.chat_title_selection
+        else:
+            selected_title = st.session_state.chat_titles[0]
+        chat_file = chat_history.query('title==@selected_title').iloc[0]['file']
+        conversation = utils.get_conversation(chat_file)
     else:
-        st.session_state.conversation += utils.staff_prompt(st.session_state.name)
-    
+        selected_title = '新对话'
+        conversation = []
+    # handle new dialog
+    if selected_title not in st.session_state.chat_titles:
+        st.session_state.chat_titles = ['新对话'] + st.session_state.chat_titles
+    # generate conversation
+    st.session_state.conversation = utils.system_prompt.copy() + conversation
+    if not conversation:
+        if st.session_state.guest:
+            st.session_state.conversation += utils.guest_prompt(st.session_state.name)
+        else:
+            st.session_state.conversation += utils.staff_prompt(st.session_state.name)
+
+# sidebar dialog selection
+def on_conversation_change():
+    del st.session_state.conversation
+selected_title = st.sidebar.radio('聊天历史', st.session_state.chat_titles, 0, key='chat_title_selection', on_change=on_conversation_change)
+
+
 ## UI
 # 对文本输入进行应答
 def gen_response(query=None):
@@ -71,12 +94,14 @@ def gen_response(query=None):
         raise NotImplementedError(task)
         
     print(f'{st.session_state.name}({task}): {user_input}')
-    st.session_state.conversation.append({
-        "role": "user", 
+    query_dict = {
+        "role": "user",
+        "name": st.session_state.name, 
         "content": user_input, 
         "task": task, 
         "time": datetime.datetime.now()
-    })
+    }
+    st.session_state.conversation.append(query_dict)
     
     # guest 长对话处理
     if st.session_state.guest and len(st.session_state.conversation) > 10:
@@ -85,12 +110,12 @@ def gen_response(query=None):
     
     # response
     if task == '对话':
-        queue = chat.chat_stream(st.session_state.conversation, st.session_state.name)
+        queue = openai.chat_stream(st.session_state.conversation, st.session_state.name)
         bot_response = {'role': 'assistant', 
                         'content': '', 
                         'queue': queue,
                         'time': datetime.datetime.now(),
-                        'model': 'ChatGPT'
+                        'name': 'ChatGPT'
                         }
         response = None
         st.session_state.conversation.append(bot_response)
@@ -107,7 +132,7 @@ def gen_response(query=None):
                         'queue': queue, 
                         'thread': thread,
                         'time': datetime.datetime.now(),
-                        'model': 'BingAI'
+                        'name': 'BingAI'
                         }
         response = None
         st.session_state.conversation.append(bot_response)
@@ -118,7 +143,8 @@ def gen_response(query=None):
             st.session_state.conversation.append({
                 'role': 'DALL·E',
                 'content': urls ,
-                'model': 'DALL·E'
+                'name': 'DALL·E',
+                'time': datetime.datetime.now()
             })
             print(f'DALL·E: {response}')
             print('-'*50)
@@ -132,19 +158,15 @@ def gen_response(query=None):
             st.session_state.conversation.append({
                 'role': 'assistant',
                 'content': response,
-                'model': 'Whisper'
+                'name': 'Whisper',
+                'time': datetime.datetime.now()
             })
             print(f'Whisper: {response}')
             print('-'*50)
     else:
         raise NotImplementedError(task)
     # log
-    with open(f'chats/{st.session_state.name}.md', 'a') as f:
-        tstring = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        f.write(f'**[{tstring}] {st.session_state.name}（{task}）: {user_input.strip()}**\n\n')
-        if response:
-            f.write(f'星尘小助手({task}): {response}\n')
-            f.write('-'*50 + '\n')
+    utils.update_chat_log(st.session_state.name, selected_title, query_dict)
 
 
 def handle_action(action_token):
@@ -165,9 +187,7 @@ def finish_reply(chat):
         chat['thread'].join()
         chat.pop('thread')
     chat.pop('queue')
-    with open(f'chats/{st.session_state.name}.md', 'a') as f:
-        response = c['content']
-        f.write(f'星尘小助手（{c.get("model")}）: {response}\n\n---\n\n')
+    utils.update_chat_log(st.session_state.name, selected_title, chat)
     
 md_formated = ""
 for i, c in enumerate(st.session_state.conversation):
@@ -206,16 +226,15 @@ for i, c in enumerate(st.session_state.conversation):
         else:
             # 结束
             content = c['content']
-            suggestions = c.get('suggestions') or []
+            suggestions = c.get('suggestions', [])
             # suggestion
-            if not suggestions:
-                content, suggestions = utils.parse_suggestions(content)
-                c['content'] = content
-                c['suggestions'] = suggestions
+            # if not suggestions:
+            #     content, suggestions = utils.parse_suggestions(content)
+            #     c['content'] = content
+            #     c['suggestions'] = suggestions
             message(content, key=str(i), avatar_style='jdenticon')
             # seggestions
-            if suggestions:
-                # suggestions = [None] + suggestions
+            if suggestions and i == len(st.session_state.conversation) -1:
                 cols = st.columns(len(suggestions))
                 for col, suggestion in zip(cols, suggestions):
                     with col:
@@ -269,8 +288,9 @@ with c2:
 c1, c2, c3 = st.columns([0.08, 0.08, 0.9])
 # 清空对话
 with c1:
-    if st.button('🧹', key='clear', help='清空对话'):
-        st.session_state.conversation = utils.init_prompt.copy()
+    if st.button('🆕', key='clear', help='新对话'):
+        del st.session_state.conversation
+        st.session_state.chat_title_selection = '新对话'
         # st.session_state.input_text = ""
         st.session_state.audio = None
         # st.session_state.task = '对话'

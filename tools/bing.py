@@ -3,7 +3,7 @@ from EdgeGPT import Chatbot, ConversationStyle
 from collections import deque
 import threading, json
 try:
-    from . import chat
+    from . import openai
 except:
     import chat
     

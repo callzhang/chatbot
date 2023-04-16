@@ -4,3 +4,5 @@ names.txt
 *.pyc
 .streamlit/bing.cookies
 secrets/
+test/
+.DS_Store

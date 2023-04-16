@@ -27,13 +27,6 @@ def chat_len(conversations):
     return count
 
 
-# def chat2history(chat: List[List]) -> List:
-#     history = utils.init_prompt
-#     for c in chat:
-#         history.append({'role': 'user', 'content': c[0]})
-#         history.append({'role': 'assistant', 'content': c[1]})
-#     history.append(utils.suggestion_prompt)
-#     return history
 
 def history2chat(history:list[dict]) -> list[list]:
     chatbot = []

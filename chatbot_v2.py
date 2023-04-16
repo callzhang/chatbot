@@ -1,7 +1,7 @@
 import gradio as gr
 import random
 import time
-from tools import chat, utils
+from tools import openai, utils
 
 name = 'Derek'
 
@@ -17,13 +17,13 @@ themes = [
     
 with gr.Blocks(theme=random.choice(themes),
                title='星尘小助手') as demo:
-    history = gr.State(utils.init_prompt)
+    history = gr.State(utils.system_prompt)
 
     def bot(msg, history, task):
         if not msg or msg.strip() == '':
             print('received empty string')
             print(f'history:\n{history}')
-            chatbot = chat.history2chat(history)
+            chatbot = openai.history2chat(history)
             return '', history, chatbot
             
         # add history
@@ -33,8 +33,8 @@ with gr.Blocks(theme=random.choice(themes),
             "task": task
         })
         history.append({'role': 'assistant', 'content': ''})
-        chatbot = chat.history2chat(history)
-        queue = chat.chat_stream(history, name)
+        chatbot = openai.history2chat(history)
+        queue = openai.chat_stream(history, name)
         start = time.time()
         receiving = True
         actions = {}
@@ -47,7 +47,7 @@ with gr.Blocks(theme=random.choice(themes),
                     history[-1]['content'] += content
                     start = time.time()
             # yield result
-            chatbot = chat.history2chat(history)
+            chatbot = openai.history2chat(history)
             chatbot[-1][1] = utils.filter_suggestion(history[-1]['content'])
             yield '', history, chatbot
             # timeout
@@ -113,7 +113,7 @@ with gr.Blocks(theme=random.choice(themes),
     chatbot.select(on_select, None, statement)
     msg.submit(bot, [msg, history, task], [msg, history, chatbot], show_progress=True)\
         .then(process_suggestions, history, action_btns)\
-        .then(chat.history2chat, history, chatbot)
+        .then(openai.history2chat, history, chatbot)
     new_chat.click(lambda: [], [], chatbot, queue=False)
 
 

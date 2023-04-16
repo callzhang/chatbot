@@ -1,21 +1,23 @@
 import pandas as pd
 import streamlit as st
-import datetime, os, re, logging
+import datetime, os, re, logging, ast
 from functools import cache
 from collections import defaultdict
+from pathlib import Path
 
 WIDE_LAYOUT_THRESHOLD = 400
 SUGGESTION_TOKEN = '[SUGGESTION]'
 FINISH_TOKEN = 'data: [DONE]'
 RETRY_TOKEN = '[RETRY]'
 TIMEOUT = 30
+CHAT_LOG_ROOT = Path('chats')
 
 # create folder
-if not os.path.exists('chats'):
-    os.makedirs('chats')
+if not os.path.exists(CHAT_LOG_ROOT):
+    os.makedirs(CHAT_LOG_ROOT)
 
 # init prompt
-init_prompt = [
+system_prompt = [
     {"role": "system", "content": "你是星尘小助手，Your name is Stardust AI Bot. 你是由星尘数据的CEO Derek创造的，你的底层是基于Transformer的技术研发。你会解答各种AI专业问题，请回答精简一些。如果你不能回答，请让用户访问“stardust.ai”。"},
     {"role": "system", "content": "星尘数据（Stardust）成立于2017年5月，公司在北京，是行业领先的数据标注和数据策略公司。星尘数据将专注AI数据技术，通过Autolabeling技术、数据策略专家服务和数据闭环系统服务，为全球人工智能企业特别是自动驾驶行业提供“燃料”，最终实现AI的平民化。"},
 ]
@@ -52,30 +54,26 @@ def conversation2markdown(conversation, name):
 
 
 # cached function to get history
-@st.cache_data(ttl=600)  # update every 10 minute
-def get_history(name):
-    history_file = f'chats/{name}.md'
+# @st.cache_data(ttl=600)  # update every 10 minute
+def get_history(name, to_dict=False):
+    history_file = CHAT_LOG_ROOT/f'{name}.md'
     if os.path.exists(history_file):
-        with open(f'chats/{st.session_state.name}.md', 'r') as f:
+        with open(history_file, 'r') as f:
             chat_log = f.read()
     else:
         chat_log = ''
         
     # find all occurance of '---' and split the string
-    chat_splited = re.split(r'---+', chat_log)
+    chat_splited = re.split(r'\n\n---*\n\n', chat_log)
     date_patten = r"\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\]" #r"\d{4}-\d{2}-\d{2}"
-    task_pattern = f'{name}（(.+)）:'
-    query_pattern = r'）: (.+)\*\*'
-    bot_pattern = r'星尘小助手（(\w+)）:'
-    replay_pattern = r'星尘小助手（\w+）: (.+)'
+    query_pattern = f'{name}（(.+)）: (.+)\*\*'
+    replay_pattern = r'星尘小助手（(.+)）: (.+)'
     chat_history = defaultdict(list)
     for chat in chat_splited:
         datetime_str = re.findall(date_patten, chat)
-        task = re.findall(task_pattern, chat)
-        query = re.findall(query_pattern, chat, flags=re.MULTILINE)
-        reply = re.findall(replay_pattern, chat, flags=re.MULTILINE)
-        bot = re.findall(bot_pattern, chat)
-        if not task or not query or not reply or not bot:
+        queries = re.findall(query_pattern, chat, flags=re.DOTALL)
+        replies = re.findall(replay_pattern, chat, flags=re.DOTALL)
+        if not queries or not replies:
             print(f'empty chat: {chat}')
             continue
         if datetime_str:
@@ -85,25 +83,85 @@ def get_history(name):
             date_str = '无日期'
         else:
             continue
-        chat_history[date_str].append(chat)
-        continue
+        
         # convert to v2 data
-        chat_history[date_str].append({
-            'role': 'user',
-            'time': datetime_str[0],
-            'user': name,
-            'task': task[0],
-            'content': query[0]
-        }) 
-        chat_history[date_str].append({
-            'role': 'assistant',
-            'time': datetime_str[0],
-            'model': bot[0],
-            'content': query[0]
-        })
-            
+        if not to_dict:
+            chat_history[date_str].append(chat)
+        else:
+            for task, query in queries:
+                chat_history[date_str].append({
+                    'role': 'user',
+                    'time': t,
+                    'name': name,
+                    'task': task,
+                    'content': query
+                })
+            for bot, reply in replies:
+                content, suggestions = parse_suggestions(reply)
+                chat_history[date_str].append({
+                    'role': 'assistant',
+                    'time': t,
+                    'name': bot,
+                    'task': task[0],
+                    'content': content,
+                    'suggestions': suggestions
+                })
     return chat_history
-            
+
+## 对话内容的管理
+# history: 所有对话标题的索引，[time, title, file]
+# conversation: 对话的具体内容列表，[{role, name, time, content, suggestion},...]
+
+def update_chat_log(name, title, chat):
+    os.makedirs(CHAT_LOG_ROOT/name, exist_ok=True)
+    chat_log_file = CHAT_LOG_ROOT/name/f'{title}.csv'
+    if not os.path.exists(chat_log_file):
+        # need to update chat history first
+        append_chat_history(name, title)
+        # create chat log
+        chat_log = pd.DataFrame([chat])
+    else:
+        chat_log = pd.read_csv(chat_log_file)
+        chat_log.append(chat, ignore_index=True)
+        chat_log
+    chat_log.to_csv(chat_log_file)
+
+
+def get_chat_history(name):
+    history_file = CHAT_LOG_ROOT/name/'history.csv'
+    if os.path.exists(history_file):
+        history = pd.read_csv(history_file)
+    else:
+        history = pd.DataFrame(columns=['time', 'title', 'file'])
+    return history
+
+def append_chat_history(name, title):
+    history = get_chat_history(name)
+    history.append({
+        'time': datetime.datetime.now(),
+        'title': title,
+        'file': CHAT_LOG_ROOT/name/title
+    }, ignore_index=True)
+    history.to_csv(CHAT_LOG_ROOT/name/'history.csv')
+    
+
+def get_conversation(file_name):
+    conversations_df = pd.read_csv(file_name).fillna('')
+    conversations_df.suggestions = conversations_df.suggestions.apply(lambda s:eval(s) if s else [])
+    conversations = conversations_df.to_dict('records')
+    return conversations
+
+
+def render_markdown(conversations, title=''):
+    conversations_md = f'# {title}\n'
+    for i, chat in enumerate(conversations):
+        if chat['role'] == 'user':
+            conversations_md += '---\n'
+            conversations_md += f"**[{chat['time']}] {chat['name']}（{chat['task']}）： {chat['content']}**\n\n"
+        elif chat['role'] == 'assistant':
+            conversations_md += f"星尘小助手（{chat['name']}）： {chat['content']}\n\n"
+    return conversations_md
+
 
 import shutil
 def zip_folder(folder_path, output_path):
@@ -129,23 +187,40 @@ def url2html(urls):
 
 ## 处理提示
 def parse_suggestions(content:str):
+    reply = content
     suggestions = []
     if SUGGESTION_TOKEN in content:
-        pattern1 = r'(\[?SUGGESTION\]?:.*)(\[.+\])'
-        pattern2 = r'(-\s|\d.\s)?(.+)'
-        matches = re.findall(pattern1, content)
-        try:
-            if matches:
-                for m in matches:
-                    content = content.replace(''.join(m), '')
-                    suggestions += eval(m[1])
-            else:
-                content, suggestion_str = re.split(r'\[SUGGESTION\]:\s+', content)
-                suggestions = re.findall(pattern2, suggestion_str, re.MULTILINE)
-                suggestions = [s[1] for s in suggestions]
-        except:
-            logging.error('Error parsing suggestion:', content)
-    return content, suggestions
+        pattern1 = r'(\[SUGGESTION\]:\s?)(\[.+\])'
+        pattern2 = r'(\[SUGGESTION\]:\s?)(.{3,})'
+        pattern3 = r'\[SUGGESTION\]|启发性问题:\s*'
+        pattern31 = r'(-\s|\d\.\s)(.+)'
+        matches1 = re.findall(pattern1, reply)
+        matches2 = re.findall(pattern2, reply)
+        matches3 = re.findall(pattern3, reply)
+        
+        if matches1:
+            for m in matches1:
+                reply = reply.replace(''.join(m), '')
+                try:
+                    suggestions += ast.literal_eval(m[1])
+                except:
+                    print('==>Error parsing suggestion:<===\n', content)
+        elif len(matches2)>=3:
+            for m in matches2:
+                reply = reply.replace(''.join(m), '')
+                suggestions.append(m[1].strip())
+        elif matches3:
+            # assume only one match
+            replies = content.split(matches3[0])
+            reply = replies[0]
+            for r in replies[1:]:
+                match31 = re.findall(pattern31, r)
+                suggestions += [m[1].strip() for m in match31]
+                for m in match31:
+                    r = r.replace(''.join(m), '')
+                reply += r
+
+    return reply, suggestions
 
 def filter_suggestion(content:str):
     pattern = r'\[?SUGGESTION\].*$'
