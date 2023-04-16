@@ -113,11 +113,6 @@ def conversation2markdown(conversation, title=""):
     return md_formated.encode('utf-8').decode()
 
 
-import shutil
-def zip_folder(folder_path, output_path):
-    filename = shutil.make_archive(output_path, "zip", folder_path)
-    return filename
-
 # utls to markdown
 def url2markdown(urls):
     md_formated = ""
@@ -201,7 +196,7 @@ def get_bingai_key(username):
     print(f'bing_key_file: {bing_key_file}')
     return bing_key_file
 
-# user
+## user auth
 sheet_url = st.secrets["public_gsheets_url"]
 from shillelagh.backends.apsw.db import connect
 

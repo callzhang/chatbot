@@ -11,7 +11,7 @@ if 'layout' not in st.session_state:
     st.session_state.layout = 'centered'
 st.set_page_config(page_title="💬星尘小助手", page_icon="💬",
                    layout=st.session_state.layout, 
-                   initial_sidebar_state="collapsed", menu_items={
+                   initial_sidebar_state="auto", menu_items={
              'Get Help': 'https://stardust.ai',
             #  'Report a bug': "https://www.extremelycoolapp.com/bug",
              'About': "# 星尘小助手. \n *仅限员工使用，请勿外传!*"
@@ -121,9 +121,10 @@ def gen_response(query=None):
                         'content': '', 
                         'queue': queue,
                         'time': datetime.datetime.now(),
+                        'task': task,
                         'name': 'ChatGPT'
                         }
-        response = None
+        chat = None
         st.session_state.conversation.append(bot_response)
     elif task == 'GPT-4':
         if 'bing' not in st.session_state:
@@ -140,34 +141,39 @@ def gen_response(query=None):
                         'time': datetime.datetime.now(),
                         'name': 'BingAI'
                         }
-        response = None
+        chat = None
         st.session_state.conversation.append(bot_response)
     elif task == '文字做图':
         with st.spinner('正在绘制'):
-            urls = imagegen.gen_image(user_input)
-            response = urls
-            st.session_state.conversation.append({
-                'role': 'DALL·E',
-                'content': urls ,
+            urls_md = imagegen.gen_image(user_input)
+            chat = {
+                'role': 'assistant',
+                'content': urls_md ,
+                'task': task,
                 'name': 'DALL·E',
                 'time': datetime.datetime.now()
-            })
-            print(f'DALL·E: {response}')
+            }
+            st.session_state.conversation.append(chat)
+            utils.update_conversation(chat)
+            print(f'DALL·E: {chat}')
             print('-'*50)
     elif task == '语音识别':
         with st.spinner('正在识别'):
-            response = asr.transcript(audio_file)
             st.session_state.conversation.append({
                 'role': 'audio',
                 'content': audio_file
             })
-            st.session_state.conversation.append({
+            transcription = asr.transcript(audio_file)
+            chat = {
                 'role': 'assistant',
-                'content': response,
+                'content': chat,
+                'task': task,
                 'name': 'Whisper',
                 'time': datetime.datetime.now()
-            })
-            print(f'Whisper: {response}')
+            }
+            st.session_state.conversation.append(chat)
+            utils.update_conversation(chat)
+            print(f'Whisper: {transcription}')
             print('-'*50)
     else:
         raise NotImplementedError(task)
