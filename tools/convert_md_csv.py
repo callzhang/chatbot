@@ -1,15 +1,15 @@
-import os, pandas as pd, sys, re, datetime
+import os, pandas as pd, sys, re, datetime, shutil
 from pathlib import Path
 from . import utils
 from collections import defaultdict
 
 def convert_md_csv():
     chat_folder = Path('chats')
-    files = chat_folder.glob('*.md')
+    files = sorted(chat_folder.glob('*.md'))
     for md in files:
         fn = os.path.basename(md)
         name = fn.split('.')[0]
-        histories = utils.get_history(name, to_dict=True)
+        histories = get_history(name, to_dict=True)
         if not histories:
             print(f'Not history found for [{fn}]')
             continue
@@ -29,6 +29,15 @@ def convert_md_csv():
         chat_history = pd.DataFrame(conversations).sort_values('title', ascending=False)
         chat_history.to_csv(target_folder/'history.csv')
         print(f'Chat converted: {md}')
+        
+    # download a copy
+    zipfile = shutil.make_archive('chats','zip','chats')
+    # move file to other location
+    os.makedirs('archieve', exist_ok=True)
+    for f in files:
+        shutil.move(f, str(f).replace('chats', 'archieve'))
+    return zipfile
+
 
 # cached function to get history
 # @st.cache_data(ttl=600)  # update every 10 minute

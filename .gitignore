@@ -1,8 +1,8 @@
 chats/
 .streamlit/secrets.toml
-names.txt
-*.pyc
 .streamlit/bing.cookies
+*.pyc
 secrets/
 test/
 .DS_Store
+archieve/

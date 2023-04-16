@@ -13,8 +13,11 @@ if 'name' not in st.session_state:
 # 特殊功能
 if st.session_state.name == "Derek":
     if st.button('convert'):
-        convert_md_csv.convert_md_csv()
-        st.balloons()
+        zipfile = convert_md_csv.convert_md_csv()
+        with open(zipfile, 'rb') as f:
+            bytes = f.read()
+            st.download_button('download zip', data=bytes, file_name='chats.zip')
+            st.balloons()
 
 # get history
 chat_history = utils.get_dialog_history(st.session_state.name)
