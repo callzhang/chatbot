@@ -29,138 +29,88 @@ guest_prompt = lambda name: [{"role": "system", "content": f'用户是访客，�
                              {'role': 'assistant', 'content': '欢迎您，访客！'}]
 
 
-
-# 导出对话内容到 markdown
-def conversation2markdown(conversation, name):
-    history = pd.DataFrame(conversation).query('role not in ["system", "audio"]')
-    # export markdown
-    md_formated = f"""# {name}的对话记录
-## 日期：{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n
----
-"""
-    for i, c in history.iterrows():
-        role, content, task, model = c['role'], c['content'], c.get('task'), c.get('model')
-        if role == "user":
-            md_formated += f"""**{name}({task}): {content}**\n\n"""
-        elif role in ["assistant"]:
-            md_formated += f"""星尘小助手({model}): {content}\n\n"""
-        elif role == "DALL·E":
-            md_formated += f"""星尘小助手({model}): {content}\n\n"""
-        else:
-            pass
-    # with open('export.md', 'w') as f:
-    #     f.write(md_formated)
-    return md_formated.encode('utf-8').decode()
-
-
-# cached function to get history
-# @st.cache_data(ttl=600)  # update every 10 minute
-def get_history(name, to_dict=False):
-    history_file = CHAT_LOG_ROOT/f'{name}.md'
-    if os.path.exists(history_file):
-        with open(history_file, 'r') as f:
-            chat_log = f.read()
-    else:
-        chat_log = ''
-        
-    # find all occurance of '---' and split the string
-    chat_splited = re.split(r'\n\n---*\n\n', chat_log)
-    date_patten = r"\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\]" #r"\d{4}-\d{2}-\d{2}"
-    query_pattern = f'{name}（(.+)）: (.+)\*\*'
-    replay_pattern = r'星尘小助手（(.+)）: (.+)'
-    chat_history = defaultdict(list)
-    for chat in chat_splited:
-        datetime_str = re.findall(date_patten, chat)
-        queries = re.findall(query_pattern, chat, flags=re.DOTALL)
-        replies = re.findall(replay_pattern, chat, flags=re.DOTALL)
-        if not queries or not replies:
-            print(f'empty chat: {chat}')
-            continue
-        if datetime_str:
-            t = datetime.datetime.strptime(datetime_str[0][1:-1], '%Y-%m-%d %H:%M:%S')
-            date_str = t.strftime('%Y-%m-%d')
-        elif chat.strip():
-            date_str = '无日期'
-        else:
-            continue
-        
-        # convert to v2 data
-        if not to_dict:
-            chat_history[date_str].append(chat)
-        else:
-            for task, query in queries:
-                chat_history[date_str].append({
-                    'role': 'user',
-                    'time': t,
-                    'name': name,
-                    'task': task,
-                    'content': query
-                })
-            for bot, reply in replies:
-                content, suggestions = parse_suggestions(reply)
-                chat_history[date_str].append({
-                    'role': 'assistant',
-                    'time': t,
-                    'name': bot,
-                    'task': task[0],
-                    'content': content,
-                    'suggestions': suggestions
-                })
-    return chat_history
-
 ## 对话内容的管理
-# history: 所有对话标题的索引，[time, title, file]
-# conversation: 对话的具体内容列表，[{role, name, time, content, suggestion},...]
+# dialog history: 所有对话标题的索引，[time, title, file]
+# conversation: 对话的具体内容，由多个chat组成，[chat,...]
+# chat: 对话中的一条信息：{role, name, time, content, suggestion}
 
-def update_chat_log(name, title, chat):
+def update_conversation(name, title, chat):
     os.makedirs(CHAT_LOG_ROOT/name, exist_ok=True)
     chat_log_file = CHAT_LOG_ROOT/name/f'{title}.csv'
     if not os.path.exists(chat_log_file):
-        # need to update chat history first
-        append_chat_history(name, title)
         # create chat log
         chat_log = pd.DataFrame([chat])
+        chat_log.to_csv(chat_log_file)
     else:
-        chat_log = pd.read_csv(chat_log_file)
-        chat_log.append(chat, ignore_index=True)
-        chat_log
+        chat_log = pd.read_csv(chat_log_file, index_col=0)
+        chat_log = chat_log.append(chat, ignore_index=True)
     chat_log.to_csv(chat_log_file)
 
-
-def get_chat_history(name):
+# dialog
+def get_dialog_history(name):
     history_file = CHAT_LOG_ROOT/name/'history.csv'
     if os.path.exists(history_file):
-        history = pd.read_csv(history_file)
+        history = pd.read_csv(history_file, index_col=0)
     else:
         history = pd.DataFrame(columns=['time', 'title', 'file'])
     return history
 
-def append_chat_history(name, title):
-    history = get_chat_history(name)
-    history.append({
+def new_dialog(name, title=None):
+    if not title:
+        title = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    history = get_dialog_history(name)
+    new_dialog = pd.DataFrame([{
         'time': datetime.datetime.now(),
         'title': title,
-        'file': CHAT_LOG_ROOT/name/title
-    }, ignore_index=True)
+        'file': CHAT_LOG_ROOT/name/f'{title}.csv'
+    }])
+    history = pd.concat([new_dialog, history], ignore_index=True)
+    history.to_csv(CHAT_LOG_ROOT/name/'history.csv')
+    return title
+    
+def edit_dialog_name(name, old_title, new_title):
+    history = get_dialog_history(name)
+    chat = history.query('title==@old_title')
+    history.loc[chat.index, 'title'] = new_title
     history.to_csv(CHAT_LOG_ROOT/name/'history.csv')
     
+def delete_dialog(name, title):
+    history = get_dialog_history(name)
+    chat = history.query('title==@title')
+    history.drop(chat.index.values, inplace=True)
+    history.to_csv(CHAT_LOG_ROOT/name/'history.csv')
 
 def get_conversation(file_name):
-    conversations_df = pd.read_csv(file_name).fillna('')
-    conversations_df.suggestions = conversations_df.suggestions.apply(lambda s:eval(s) if s else [])
+    if not os.path.exists(file_name):
+        return []
+    conversations_df = pd.read_csv(file_name, index_col=0).fillna('')
+    if 'suggestions' in conversations_df:
+        conversations_df.suggestions = conversations_df.suggestions.apply(lambda s:eval(s) if s else [])
     conversations = conversations_df.to_dict('records')
     return conversations
 
 
-def render_markdown(conversations, title=''):
-    conversations_md = f'# {title}\n'
-    for i, chat in enumerate(conversations):
-        if chat['role'] == 'user':
-            conversations_md += '---\n'
-            conversations_md += f"**[{chat['time']}] {chat['name']}（{chat['task']}）： {chat['content']}**\n\n"
-        elif chat['role'] == 'assistant':
-            conversations_md += f"星尘小助手（{chat['name']}）： {chat['content']}\n\n"
-    return conversations_md
+
+## Markdown
+# 导出对话内容到 markdown
+def conversation2markdown(conversation, title=""):
+    history = pd.DataFrame(conversation).query('role not in ["system", "audio"]')
+    # export markdown
+    md_formated = f"""# 关于“{title}”的对话记录
+*导出日期：{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}*\n
+"""
+    for i, c in history.iterrows():
+        role, content, task, name, time = c['role'], c['content'], c.get('task'), c.get('name'), c.get('time')
+        if role == "user":
+            md_formated += '---\n'
+            md_formated += f"""**[{time}]{name}({task}): {content}**\n\n"""
+        elif role in ["assistant"]:
+            md_formated += f"""星尘小助手({name}): {content}\n\n"""
+        elif role == "DALL·E":
+            md_formated += f"""星尘小助手({name}): {content}\n\n"""
+        else:
+            raise Exception(f'Unhandled chat: {c}')
+    return md_formated.encode('utf-8').decode()
 
 
 import shutil
@@ -255,7 +205,7 @@ def get_bingai_key(username):
 sheet_url = st.secrets["public_gsheets_url"]
 from shillelagh.backends.apsw.db import connect
 
-@cache
+@st.cache_data(ttl=3600)
 def get_db():
     print('connecting to google sheet...')
     conn = connect(":memory:")
