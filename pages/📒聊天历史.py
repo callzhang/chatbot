@@ -28,9 +28,11 @@ if not len(chat_titles):
 
 # print(f'dates: {chat_history.keys()}')
 # current_page = st.selectbox('选择日期', dates, 0)
-selected_title = st.sidebar.radio('聊天历史', chat_titles.sort_values(ascending=False), 0)
+selected_title = st.sidebar.radio('聊天历史', chat_titles, 0)
 # display chat in current page
-chat_file = chat_history.query('title==@selected_title').iloc[0]['file']
-chats = utils.get_conversation(chat_file)
+chats = utils.get_conversation(st.session_state.name, selected_title)
+if not chats:
+    st.info('暂无历史记录')
+    st.stop()
 chat_md = utils.conversation2markdown(chats, title=selected_title)
 st.markdown(chat_md)

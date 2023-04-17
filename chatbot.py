@@ -23,7 +23,7 @@ user_db = utils.get_db()
 if 'name' not in st.session_state:
     st.session_state.guest = True
     st.warning('本系统需要消耗计算资源，特别是图片和语音功能；请适度体验AI的能力，尽量用在工作相关内容上😊')
-    code = st.text_input('请输入你的访问码', key='my_name', help='仅限员工使用，请勿外传！')
+    code = st.text_input('请输入你的访问码', help='仅限员工使用，请勿外传！')
     if code:
         access_data = user_db.query('访问码==@code')
         if len(access_data):
@@ -32,7 +32,7 @@ if 'name' not in st.session_state:
             if datetime.datetime.now().date() < expiration:
                 st.session_state.guest = False
         else:
-            st.session_state.name = '访客'
+            st.session_state.name = code
         st.experimental_rerun()
     st.stop()
     
@@ -40,8 +40,9 @@ if 'name' not in st.session_state:
 # history: 所有对话标题的索引，[time, title, file]
 # conversation: 对话的具体内容列表，[{role, name, time, content, suggestion},...]
 if "conversation" not in st.session_state:
-    chat_history = utils.get_dialog_history(st.session_state.name).sort_values('time', ascending=False)
     # 初始化当前对话
+    chat_history = utils.get_dialog_history(st.session_state.name)
+    # 初始化对话列表
     st.session_state.chat_titles = chat_history['title'].tolist()
     # 没有历史记录或创建新对话，增加“新对话”至title
     if not st.session_state.chat_titles:
@@ -56,12 +57,7 @@ if "conversation" not in st.session_state:
         selected_title = st.session_state.chat_titles[0]
         
     # 初始化对话记录
-    dialog = chat_history.query('title==@selected_title')
-    if len(dialog):
-        chat_file = dialog.iloc[0]['file']
-    else:
-        chat_file = chat_history.iloc[0]['file']
-    conversation = utils.get_conversation(chat_file)
+    conversation = utils.get_conversation(st.session_state.name, selected_title)
     # update system prompt
     st.session_state.conversation = utils.system_prompt.copy()
     if st.session_state.guest:
@@ -72,7 +68,10 @@ if "conversation" not in st.session_state:
     
 
 ## UI
-# sidebar dialog selection
+if st.session_state.guest:
+    st.info('访客模式：支持最大10轮对话和20轮聊天历史')
+    
+# 聊天历史列表
 def on_conversation_change():
     del st.session_state.conversation
 selected_title = st.sidebar.radio('聊天历史', 
@@ -86,6 +85,8 @@ def gen_response(query=None):
         st.session_state.conversation[-1].pop('suggestions')
     if 'action' in st.session_state.conversation[-1]:
         st.session_state.conversation[-1].pop('action')
+        
+    # get task and input
     task = st.session_state.task
     if task in ['对话', '文字做图', 'GPT-4', '文心一言']:
         user_input = query or st.session_state.input_text
@@ -98,7 +99,8 @@ def gen_response(query=None):
             user_input = audio_file.name
     else:
         raise NotImplementedError(task)
-        
+    
+    # gen user query
     print(f'{st.session_state.name}({task}): {user_input}')
     query_dict = {
         "role": "user",
@@ -107,12 +109,9 @@ def gen_response(query=None):
         "task": task, 
         "time": datetime.datetime.now()
     }
+    # display and update db
     st.session_state.conversation.append(query_dict)
-    
-    # guest 长对话处理
-    if st.session_state.guest and len(st.session_state.conversation) > 10:
-        st.session_state.conversation.append({"role": "assistant", "content": '访客不支持长对话，请联系管理员', "time": datetime.datetime.now()})
-        return
+    utils.update_conversation(st.session_state.name, selected_title, query_dict)
     
     # response
     if task == '对话':
@@ -154,7 +153,7 @@ def gen_response(query=None):
                 'time': datetime.datetime.now()
             }
             st.session_state.conversation.append(chat)
-            utils.update_conversation(chat)
+            utils.update_conversation(st.session_state.name, selected_title, chat)
             print(f'DALL·E: {chat}')
             print('-'*50)
     elif task == '语音识别':
@@ -172,13 +171,11 @@ def gen_response(query=None):
                 'time': datetime.datetime.now()
             }
             st.session_state.conversation.append(chat)
-            utils.update_conversation(chat)
+            utils.update_conversation(st.session_state.name, selected_title, chat)
             print(f'Whisper: {transcription}')
             print('-'*50)
     else:
         raise NotImplementedError(task)
-    # log
-    utils.update_conversation(st.session_state.name, selected_title, query_dict)
 
 
 def handle_action(action_token):
@@ -279,11 +276,25 @@ c1, c2 = st.columns([0.18,0.82])
 with c1:
     task = st.selectbox('选择功能', ['对话', 'GPT-4', '文字做图', '语音识别'], key='task', label_visibility='collapsed')
 with c2:
-    disabled, help = False, '输入你的问题，然后按回车提交。'
-    if task == '文心一言':
+    # guest limit
+    if st.session_state.guest and len(st.session_state.conversation) > 10:
+        disabled, help = True, '访客不支持长对话，请联系管理员'
+    elif task == '对话':
+        disabled, help = False, '输入你的问题，然后按回车提交。'
+    elif task == '文心一言':
         disabled, help = True, '文心一言功能暂未开放'
-    elif task == 'GPT-4' and utils.get_bingai_key(st.session_state.name) is None:
-        disabled, help = False, '请先在设置中填写BingAI的秘钥'
+    elif task == 'GPT-4':
+        if utils.get_bingai_key(st.session_state.name) is None:
+            disabled, help = True, '请先在设置中填写BingAI的秘钥'
+        else:
+            disabled, help = False, '输入你的问题，然后按回车提交给BingAI。'
+    elif task == '文字做图':
+        disabled, help = st.session_state.guest, '访客不支持文字做图'
+    elif task == '语音识别':
+        disabled, help = st.session_state.guest, '访客不支持语音识别'
+    else:
+        raise NotImplementedError(task)
+    # 输入框
     if task in ['对话', '文字做图', 'GPT-4', '文心一言']:
         user_input = st.text_input(label="输入你的问题：", placeholder=help,
                             help=help,
@@ -292,32 +303,36 @@ with c2:
                             label_visibility='collapsed',
                             on_change=gen_response)
     elif task == '语音识别':
-        audio_file = st.file_uploader('上传语音文件', type=asr.accepted_types, key='audio', on_change=gen_response)
+        audio_file = st.file_uploader('上传语音文件', type=asr.accepted_types, key='audio', on_change=gen_response, disabled=disabled)
     else:
         raise NotImplementedError(task)
 
-## 功能区
+## 聊天历史功能区
 c1, c2, c3, c4 = st.sidebar.columns(4)
 
 with c1: # 新对话
-    if st.button('🆕', key='clear', help='新对话'):
+    if st.session_state.guest and len(st.session_state.chat_titles) >= 20:
+        disabled, help = True, '访客不支持超过10轮对话，请联系管理员'
+    else:
+        disabled, help = False, '新对话'
+    if st.button('➕', key='clear', help=help, disabled=disabled):
         del st.session_state.conversation
         title = utils.new_dialog(st.session_state.name)
         st.session_state.new_chat = title
         st.session_state.audio = None
         st.session_state.layout = 'centered'
         st.experimental_rerun()
-with c2: # 导出
+with c2: # 删除
+    if st.button('⛔', help='删除当前聊天记录', disabled=st.session_state.guest):
+        del st.session_state.conversation
+        utils.delete_dialog(st.session_state.name, selected_title)
+        st.experimental_rerun()
+with c3: # 导出
     if st.download_button(label='📤', help='导出对话',
                         data=utils.conversation2markdown(st.session_state.conversation, st.session_state.name), 
                         file_name=f'history.md',
                         mime='text/markdown'):
         st.success('导出成功！')
-with c3: # 删除
-    if st.button('⛔', help='删除当前聊天记录'):
-        del st.session_state.conversation
-        utils.delete_dialog(st.session_state.name, selected_title)
-        st.experimental_rerun()
         
 with c4: # 修改
     def update_title():

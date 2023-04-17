@@ -13,7 +13,7 @@ bing_key_file = f'secrets/{st.session_state.name}/bing_key.json'
 
 openai_tab, bing_tab = st.tabs(['OpenAI', 'BingAI'])
 with openai_tab:
-    st.info('OpenAI调用方法为官方，请放心使用😊')
+    st.info('可以使用自己的OpenAI的秘钥，调用方法为官方，不会封号，请放心使用😊')
     st.checkbox('OpenAI秘钥已保存', value=os.path.exists(openai_key_file))
     openai_key = ''
     if os.path.exists(openai_key_file):

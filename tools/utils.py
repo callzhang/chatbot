@@ -35,16 +35,34 @@ guest_prompt = lambda name: [{"role": "system", "content": f'用户是访客，�
 # chat: 对话中的一条信息：{role, name, time, content, suggestion}
 
 def update_conversation(name, title, chat):
-    os.makedirs(CHAT_LOG_ROOT/name, exist_ok=True)
-    chat_log_file = CHAT_LOG_ROOT/name/f'{title}.csv'
-    if not os.path.exists(chat_log_file):
+    dialog_file = get_dialog_file(name, title)
+    if not os.path.exists(dialog_file):
         # create chat log
         chat_log = pd.DataFrame([chat])
-        chat_log.to_csv(chat_log_file)
+        chat_log.to_csv(dialog_file)
     else:
-        chat_log = pd.read_csv(chat_log_file, index_col=0)
+        chat_log = pd.read_csv(dialog_file, index_col=0)
         chat_log = chat_log.append(chat, ignore_index=True)
-    chat_log.to_csv(chat_log_file)
+    chat_log.to_csv(dialog_file)
+    
+def get_conversation(name, title):
+    file_name = get_dialog_file(name, title)
+    if not os.path.exists(file_name):
+        return []
+    conversations_df = pd.read_csv(file_name, index_col=0).fillna('')
+    if 'suggestions' in conversations_df:
+        conversations_df.suggestions = conversations_df.suggestions.apply(lambda s:eval(s) if s else [])
+    conversations = conversations_df.to_dict('records')
+    return conversations
+    
+def get_dialog_file(name, title):
+    history = get_dialog_history(name)
+    dialog = history.query('title==@title')
+    if len(dialog):
+        chat_file = dialog.iloc[0]['file']
+    else:
+        chat_file = history.iloc[0]['file']
+    return chat_file
 
 # dialog
 def get_dialog_history(name):
@@ -65,6 +83,7 @@ def new_dialog(name, title=None):
         'file': CHAT_LOG_ROOT/name/f'{title}.csv'
     }])
     history = pd.concat([new_dialog, history], ignore_index=True)
+    os.makedirs(CHAT_LOG_ROOT/name, exist_ok=True)
     history.to_csv(CHAT_LOG_ROOT/name/'history.csv')
     return title
     
@@ -80,14 +99,6 @@ def delete_dialog(name, title):
     history.drop(chat.index.values, inplace=True)
     history.to_csv(CHAT_LOG_ROOT/name/'history.csv')
 
-def get_conversation(file_name):
-    if not os.path.exists(file_name):
-        return []
-    conversations_df = pd.read_csv(file_name, index_col=0).fillna('')
-    if 'suggestions' in conversations_df:
-        conversations_df.suggestions = conversations_df.suggestions.apply(lambda s:eval(s) if s else [])
-    conversations = conversations_df.to_dict('records')
-    return conversations
 
 
 
