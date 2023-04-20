@@ -2,15 +2,16 @@ import pandas as pd
 import streamlit as st
 import datetime, os, re, logging, ast
 from functools import cache
-from collections import defaultdict
 from pathlib import Path
+from retry import retry
 
-WIDE_LAYOUT_THRESHOLD = 400
+WIDE_LAYOUT_THRESHOLD = 1000
 SUGGESTION_TOKEN = '[SUGGESTION]'
 FINISH_TOKEN = 'data: [DONE]'
 RETRY_TOKEN = '[RETRY]'
 TIMEOUT = 30
 CHAT_LOG_ROOT = Path('chats')
+LOGIN_CODE = 'login_code'
 
 # create folder
 if not os.path.exists(CHAT_LOG_ROOT):
@@ -211,7 +212,9 @@ def get_bingai_key(username):
 sheet_url = st.secrets["public_gsheets_url"]
 from shillelagh.backends.apsw.db import connect
 
-# @st.cache_data(ttl=3600)
+
+@st.cache_data(ttl=600)
+@retry(tries=3, delay=2, backoff=2)
 def get_db():
     print('connecting to google sheet...')
     conn = connect(":memory:")
@@ -222,6 +225,7 @@ def get_db():
     df = pd.DataFrame(rows, columns=['姓名', '访问码', '截止日期'])
     print(f'Fetched {len(df)} records')
     return df
+
 
 if __name__ == '__main__':
     db = get_db()

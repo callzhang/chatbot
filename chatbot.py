@@ -4,7 +4,7 @@ from tools import imagegen, asr, openai, utils, bing
 import time, datetime, logging, json, re
 # from streamlit_extras.colored_header import colored_header
 from streamlit_extras.buy_me_a_coffee import button
-
+import extra_streamlit_components as stx
 
 # 初始化
 if 'layout' not in st.session_state:
@@ -20,19 +20,28 @@ st.title("💬星尘小助手")
 
 ## user auth
 if 'name' not in st.session_state:
-    user_db = utils.get_db()
     st.session_state.guest = True
-    st.warning('本系统需要消耗计算资源，特别是图片和语音功能；请适度体验AI的能力，尽量用在工作相关内容上😊')
-    code = st.text_input('请输入你的访问码', help='仅限员工使用，请勿外传！')
+    cm = stx.CookieManager()
+    code = cm.get(utils.LOGIN_CODE)
+    if not code:
+        st.warning('本系统需要消耗计算资源，特别是图片和语音功能；请适度体验AI的能力，尽量用在工作相关内容上😊')
+        code = st.text_input('请输入你的访问码', help='仅限员工使用，请勿外传！')
     if code:
+        user_db = utils.get_db()
         access_data = user_db.query('访问码==@code')
         if len(access_data):
             st.session_state.name = access_data['姓名'].iloc[0]
             expiration = access_data['截止日期'].iloc[0]
             if datetime.datetime.now().date() < expiration:
+                # login success
                 st.session_state.guest = False
+                exp_date = datetime.datetime.now() + datetime.timedelta(days=30)
+                if exp_date.date() > expiration:
+                    exp_date = datetime.datetime(expiration.year, expiration.month, expiration.day, 23, 59, 59)
+                cm.set(utils.LOGIN_CODE, code, expires_at=exp_date)
         else:
             st.session_state.name = code
+            cm.delete(utils.LOGIN_CODE)
         st.experimental_rerun()
     st.stop()
     
