@@ -19,8 +19,8 @@ st.set_page_config(page_title="💬星尘小助手", page_icon="💬",
 st.title("💬星尘小助手")
 
 ## user auth
-user_db = utils.get_db()
 if 'name' not in st.session_state:
+    user_db = utils.get_db()
     st.session_state.guest = True
     st.warning('本系统需要消耗计算资源，特别是图片和语音功能；请适度体验AI的能力，尽量用在工作相关内容上😊')
     code = st.text_input('请输入你的访问码', help='仅限员工使用，请勿外传！')

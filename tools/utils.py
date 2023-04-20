@@ -211,7 +211,7 @@ def get_bingai_key(username):
 sheet_url = st.secrets["public_gsheets_url"]
 from shillelagh.backends.apsw.db import connect
 
-@st.cache_data(ttl=3600)
+# @st.cache_data(ttl=3600)
 def get_db():
     print('connecting to google sheet...')
     conn = connect(":memory:")
