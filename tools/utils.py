@@ -149,7 +149,7 @@ def parse_suggestions(content:str):
     if SUGGESTION_TOKEN in content:
         pattern1 = r'(\[SUGGESTION\]:\s?)(\[.+\])'
         pattern2 = r'(\[SUGGESTION\]:\s?)(.{3,})'
-        pattern3 = r'\[SUGGESTION\]|启发性问题:\s*'
+        pattern3 = r'\[SUGGESTION\]|启发性问题\s*'
         pattern31 = r'(-\s|\d\.\s)(.+)'
         matches1 = re.findall(pattern1, reply)
         matches2 = re.findall(pattern2, reply)
