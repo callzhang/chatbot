@@ -36,7 +36,8 @@ def update_conversation(name, title, chat):
         chat_log.to_csv(dialog_file)
     else:
         chat_log = pd.read_csv(dialog_file, index_col=0)
-        chat_log = chat_log.append(chat, ignore_index=True)
+        # chat_log = chat_log.append(chat, ignore_index=True) # deprecated
+        chat_log = pd.concat([chat_log, pd.DataFrame([chat])], ignore_index=True)
     chat_log.to_csv(dialog_file)
     
 def get_conversation(name, title):
