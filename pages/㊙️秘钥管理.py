@@ -12,16 +12,17 @@ if not st.session_state.get('name'):
     st.json(cm.get_all(), expanded=False)
     st.stop()
     
+    
 openai_key_file = f'secrets/{st.session_state.name}/openai_key.json'
 bing_key_file = f'secrets/{st.session_state.name}/bing_key.json'
 
 openai_tab, bing_tab = st.tabs(['OpenAI', 'BingAI'])
 with openai_tab:
     st.info('可以使用自己的OpenAI的秘钥，调用方法为官方，不会封号，请放心使用😊')
-    st.checkbox('OpenAI秘钥已保存', value=os.path.exists(openai_key_file))
+    st.checkbox('OpenAI秘钥已保存', value=os.path.exists(openai_key_file), disabled=True)
     openai_key = ''
     if os.path.exists(openai_key_file):
-        openai_key = json.load(open(openai_key_file, 'r'))['openai_key']
+        openai_key = utils.get_openai_key(st.session_state.name, fallback=False)
     openai_key = st.text_input('请输入OpenAI的秘钥', type='password', value=openai_key, help='从[这个](https://beta.openai.com/account/api-keys)页面获取秘钥')
     if openai_key and st.button('保存', key='save_openai_key'):
         os.makedirs(f'secrets/{st.session_state.name}', exist_ok=True)
@@ -30,13 +31,14 @@ with openai_tab:
             'openai_key': openai_key
         }
         json.dump(key_json, open(openai_key_file, 'w'))
+        utils.get_openai_key.delete_cache(st.session_state.name)
         st.success('秘钥已保存')
         time.sleep(1)
         st.experimental_rerun()
         
 with bing_tab:
     st.warning('BingAI调用方法非官方，可能会导致问题，请酌情使用。申请BingAI，请先将小猫咪设置为全局模式，并选择“英国”等非亚洲国家，进入bing.com时需要清空cookies。')
-    st.checkbox('BingAI秘钥已保存', value=os.path.exists(bing_key_file))
+    st.checkbox('BingAI秘钥已保存', value=os.path.exists(bing_key_file), disabled=True)
     bing_instruction = '''### Checking access (Required)
 - Install the latest version of Microsoft Edge
 - Open http://bing.com/chat
@@ -49,7 +51,6 @@ with bing_tab:
 - Paste your cookies below
     '''
     # st.markdown(bing_instruction)
-    bingai_cookies = ''
     cookie_template = '''[
     {
         "domain": ".bing.com",
@@ -65,10 +66,7 @@ with bing_tab:
         "value": "X=rebateson"
     },...
     '''
-    if os.path.exists(bing_key_file):
-        # bingai_cookies = json.load(open(bing_key_file, 'r'))
-        with open(bing_key_file, 'r') as f:
-            bingai_cookies = f.read()
+    bingai_cookies = utils.get_bingai_key(st.session_state.name)
     bingai_cookies = st.text_area('请输入BingAI的cookies', placeholder=cookie_template,
                                   height=200, value=bingai_cookies, 
                                   help=bing_instruction)
@@ -83,6 +81,7 @@ with bing_tab:
             st.stop()
         with open(bing_key_file, 'w') as f:
             f.write(bingai_cookies)
+        utils.get_bingai_key.delete_cache(st.session_state.name)
         st.success('BingAI cookies已保存')
         time.sleep(1)
         st.experimental_rerun()

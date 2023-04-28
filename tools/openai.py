@@ -3,7 +3,7 @@ import requests, json, re
 # import streamlit as st
 import threading
 from collections import deque
-from . import utils
+from . import utils, chat
 try:
     from transformers import AutoTokenizer
     tokenizer = AutoTokenizer.from_pretrained("gpt2")
@@ -27,7 +27,7 @@ def chat_len(conversations):
     return count
 
 
-
+# adapter for gradio
 def history2chat(history:list[dict]) -> list[list]:
     chatbot = []
     roles = ['user', 'assistant']
@@ -42,13 +42,13 @@ def history2chat(history:list[dict]) -> list[list]:
     return chatbot
 
 # receiving streaming server-sent events（异步）
-def chat_stream(conversations:list, username:str):
-    max_length = 500 #if st.session_state.guest else 2000
+def chat_stream(conversations:list, username:str, guest=True):
+    max_length = 500 if guest else 2000
     chat_history = [{k: c[k] for k in keys_keep}
                     for c in conversations if c['role'] in roles2keep]
     while chat_len(chat_history) > max_length and len(chat_history) > 1:
         chat_history.pop(0)
-    chat_history.append(utils.suggestion_prompt)
+    chat_history.append(chat.suggestion_prompt)
     print(f'sending conversations rounds: {len(chat_history)}, length:{chat_len(chat_history)}')
     # create a queue to store the responses
     queue = deque()

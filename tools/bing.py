@@ -22,7 +22,7 @@ class BingAI:
         
     def renew(self):
         try:
-            self.bot = Chatbot(cookiePath=utils.get_bingai_key(self.name))
+            self.bot = Chatbot(cookiePath=utils.get_bingai_key(self.name, file_only=True))
         except Exception as e:
             logging.error(f'创建bing实例出错：\n{e}')
             

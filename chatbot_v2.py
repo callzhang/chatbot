@@ -1,7 +1,7 @@
 import gradio as gr
 import random
 import time
-from tools import openai, utils
+from tools import openai, utils, chat
 
 name = 'Derek'
 
@@ -17,7 +17,7 @@ themes = [
     
 with gr.Blocks(theme=random.choice(themes),
                title='星尘小助手') as demo:
-    history = gr.State(utils.system_prompt)
+    history = gr.State(chat.system_prompt)
 
     def bot(msg, history, task):
         if not msg or msg.strip() == '':

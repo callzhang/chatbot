@@ -1,7 +1,8 @@
 import streamlit as st, pandas as pd
 from streamlit_chat import message
-from tools import imagegen, asr, openai, utils, bing
-import time, datetime, logging, json, re
+from tools import imagegen, asr, openai, utils, bing, chat
+import time, logging
+from datetime import datetime, timedelta
 # from streamlit_extras.colored_header import colored_header
 from streamlit_extras.buy_me_a_coffee import button
 import extra_streamlit_components as stx
@@ -32,12 +33,12 @@ if 'name' not in st.session_state:
         if len(access_data):
             st.session_state.name = access_data['姓名'].iloc[0]
             expiration = access_data['截止日期'].iloc[0]
-            if datetime.datetime.now().date() < expiration:
+            if datetime.now().date() < expiration:
                 # login success
                 st.session_state.guest = False
-                exp_date = datetime.datetime.now() + datetime.timedelta(days=30)
+                exp_date = datetime.now() + timedelta(days=30)
                 if exp_date.date() > expiration:
-                    exp_date = datetime.datetime(expiration.year, expiration.month, expiration.day, 23, 59, 59)
+                    exp_date = datetime(expiration.year, expiration.month, expiration.day, 23, 59, 59)
                 cm.set(utils.LOGIN_CODE, code, expires_at=exp_date)
         else:
             st.session_state.name = code
@@ -50,12 +51,12 @@ if 'name' not in st.session_state:
 # conversation: 对话的具体内容列表，[{role, name, time, content, suggestion},...]
 if "conversation" not in st.session_state:
     # 初始化当前对话
-    chat_history = utils.get_dialog_history(st.session_state.name)
+    chat_history = chat.get_dialog_history(st.session_state.name)
     # 初始化对话列表
     st.session_state.chat_titles = chat_history['title'].tolist()
     # 没有历史记录或创建新对话，增加“新对话”至title
     if not st.session_state.chat_titles:
-        utils.new_dialog(st.session_state.name)
+        chat.new_dialog(st.session_state.name)
         st.experimental_rerun()
     elif 'new_chat' in st.session_state:
         selected_title = st.session_state.new_chat
@@ -66,13 +67,13 @@ if "conversation" not in st.session_state:
         selected_title = st.session_state.chat_titles[0]
         
     # 初始化对话记录
-    conversation = utils.get_conversation(st.session_state.name, selected_title)
+    conversation = chat.get_conversation(st.session_state.name, selected_title)
     # update system prompt
-    st.session_state.conversation = utils.system_prompt.copy()
+    st.session_state.conversation = chat.system_prompt.copy()
     if st.session_state.guest:
-        st.session_state.conversation += utils.guest_prompt(st.session_state.name)
+        st.session_state.conversation += chat.guest_prompt(st.session_state.name)
     else:
-        st.session_state.conversation += utils.staff_prompt(st.session_state.name)
+        st.session_state.conversation += chat.staff_prompt(st.session_state.name)
     st.session_state.conversation += conversation
     
 
@@ -116,23 +117,23 @@ def gen_response(query=None):
         "name": st.session_state.name, 
         "content": user_input, 
         "task": task, 
-        "time": datetime.datetime.now()
+        "time": datetime.now()
     }
     # display and update db
     st.session_state.conversation.append(query_dict)
-    utils.update_conversation(st.session_state.name, selected_title, query_dict)
+    chat.update_conversation(st.session_state.name, selected_title, query_dict)
     
     # response
     if task == '对话':
-        queue = openai.chat_stream(st.session_state.conversation, st.session_state.name)
+        queue = openai.chat_stream(st.session_state.conversation, st.session_state.name, st.session_state.guest)
         bot_response = {'role': 'assistant', 
                         'content': '', 
                         'queue': queue,
-                        'time': datetime.datetime.now(),
+                        'time': datetime.now(),
                         'task': task,
                         'name': 'ChatGPT'
                         }
-        chat = None
+        # chat = None
         st.session_state.conversation.append(bot_response)
     elif task == 'GPT-4':
         if 'bing' not in st.session_state:
@@ -146,23 +147,23 @@ def gen_response(query=None):
                         'content': '', 
                         'queue': queue, 
                         'thread': thread,
-                        'time': datetime.datetime.now(),
+                        'time': datetime.now(),
                         'name': 'BingAI'
                         }
-        chat = None
+        # chat = None
         st.session_state.conversation.append(bot_response)
     elif task == '文字做图':
         with st.spinner('正在绘制'):
             urls_md = imagegen.gen_image(user_input)
-            chat = {
+            bot_response = {
                 'role': 'assistant',
                 'content': urls_md ,
                 'task': task,
                 'name': 'DALL·E',
-                'time': datetime.datetime.now()
+                'time': datetime.now()
             }
-            st.session_state.conversation.append(chat)
-            utils.update_conversation(st.session_state.name, selected_title, chat)
+            st.session_state.conversation.append(bot_response)
+            chat.update_conversation(st.session_state.name, selected_title, chat)
             print(f'DALL·E: {chat}')
             print('-'*50)
     elif task == '语音识别':
@@ -172,15 +173,15 @@ def gen_response(query=None):
                 'content': audio_file
             })
             transcription = asr.transcript(audio_file)
-            chat = {
+            bot_response = {
                 'role': 'assistant',
                 'content': chat,
                 'task': task,
                 'name': 'Whisper',
-                'time': datetime.datetime.now()
+                'time': datetime.now()
             }
-            st.session_state.conversation.append(chat)
-            utils.update_conversation(st.session_state.name, selected_title, chat)
+            st.session_state.conversation.append(bot_response)
+            chat.update_conversation(st.session_state.name, selected_title, chat)
             print(f'Whisper: {transcription}')
             print('-'*50)
     else:
@@ -200,12 +201,12 @@ def handle_action(action_token):
 
 
 # 显示对话内容
-def finish_reply(chat):
-    if chat.get('thread'):
-        chat['thread'].join()
-        chat.pop('thread')
-    chat.pop('queue')
-    utils.update_conversation(st.session_state.name, selected_title, chat)
+def finish_reply(c, save_log=True):
+    if c.get('thread'):
+        c['thread'].join()
+        c.pop('thread')
+    c.pop('queue')
+    chat.update_conversation(st.session_state.name, selected_title, c)
     
 md_formated = ""
 for i, c in enumerate(st.session_state.conversation):
@@ -228,12 +229,12 @@ for i, c in enumerate(st.session_state.conversation):
                     st.experimental_rerun()
                 else:
                     c['content'] += content
-                    c['time'] = datetime.datetime.now()
+                    c['time'] = datetime.now()
             # 超时
-            if (datetime.datetime.now() - c['time']).total_seconds() > utils.TIMEOUT:
+            if (datetime.now() - c['time']).total_seconds() > utils.TIMEOUT:
                 c['content'] += '\n\n抱歉出了点问题，请重试...'
                 c['actions'] = {'重试': utils.RETRY_TOKEN}
-                finish_reply(c)
+                finish_reply(c, save_log=False)
                 
             # 渲染
             content = c['content'].replace(utils.SUGGESTION_TOKEN, '')
@@ -326,7 +327,7 @@ with c1: # 新对话
         disabled, help = False, '新对话'
     if st.button('➕', key='clear', help=help, disabled=disabled):
         del st.session_state.conversation
-        title = utils.new_dialog(st.session_state.name)
+        title = chat.new_dialog(st.session_state.name)
         st.session_state.new_chat = title
         st.session_state.audio = None
         st.session_state.layout = 'centered'
@@ -334,7 +335,7 @@ with c1: # 新对话
 with c2: # 删除
     if st.button('⛔', help='删除当前聊天记录', disabled=st.session_state.guest):
         del st.session_state.conversation
-        utils.delete_dialog(st.session_state.name, selected_title)
+        chat.delete_dialog(st.session_state.name, selected_title)
         st.experimental_rerun()
 with c3: # 导出
     if st.download_button(label='📤', help='导出对话',
@@ -347,7 +348,7 @@ with c4: # 修改
     def update_title():
         del st.session_state.conversation
         new_title = st.session_state.new_title_text
-        utils.edit_dialog_name(st.session_state.name, selected_title, new_title)
+        chat.edit_dialog_name(st.session_state.name, selected_title, new_title)
         # st.experimental_rerun()
     if st.button('✏️', help='修改对话名称'):
         new_title = st.sidebar.text_input('修改名称', selected_title, help='修改当前对话标题', key='new_title_text', on_change=update_title)
