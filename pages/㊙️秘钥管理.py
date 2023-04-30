@@ -24,17 +24,23 @@ with openai_tab:
     if os.path.exists(openai_key_file):
         openai_key = utils.get_openai_key(st.session_state.name, fallback=False)
     openai_key = st.text_input('请输入OpenAI的秘钥', type='password', value=openai_key, help='从[这个](https://beta.openai.com/account/api-keys)页面获取秘钥')
-    if openai_key and st.button('保存', key='save_openai_key'):
-        os.makedirs(f'secrets/{st.session_state.name}', exist_ok=True)
-        st.session_state.openai_key = openai_key
-        key_json = {
-            'openai_key': openai_key
-        }
-        json.dump(key_json, open(openai_key_file, 'w'))
-        utils.get_openai_key.delete_cache(st.session_state.name)
-        st.success('秘钥已保存')
-        time.sleep(1)
-        st.experimental_rerun()
+    if st.button('保存', key='save_openai_key'):
+        if not openai_key and os.path.exists(openai_key_file):
+            # 清除秘钥
+            os.remove(openai_key_file)
+            st.success('秘钥已清除')
+        else:
+            os.makedirs(f'secrets/{st.session_state.name}', exist_ok=True)
+            st.session_state.openai_key = openai_key
+            key_json = {
+                'openai_key': openai_key
+            }
+            json.dump(key_json, open(openai_key_file, 'w'))
+            utils.get_openai_key.clear_cache()
+            st.success('秘钥已保存')
+            time.sleep(1)
+            st.experimental_rerun()
+    
         
 with bing_tab:
     st.warning('BingAI调用方法非官方，可能会导致问题，请酌情使用。申请BingAI，请先将小猫咪设置为全局模式，并选择“英国”等非亚洲国家，进入bing.com时需要清空cookies。')
@@ -81,7 +87,7 @@ with bing_tab:
             st.stop()
         with open(bing_key_file, 'w') as f:
             f.write(bingai_cookies)
-        utils.get_bingai_key.delete_cache(st.session_state.name)
+        utils.get_bingai_key.clear_cache()
         st.success('BingAI cookies已保存')
         time.sleep(1)
         st.experimental_rerun()
