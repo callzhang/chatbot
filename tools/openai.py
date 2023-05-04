@@ -1,5 +1,5 @@
 from retry import retry
-import requests, json, re
+import requests, json, re, logging
 # import streamlit as st
 import threading
 from collections import deque
@@ -117,7 +117,7 @@ def get_response(header, data, queue):
                 print(e)
     else:
         estring = f'出错啦，请重试: {response.status_code}, {response.reason}'
-        print(json.dumps(data, indent=2))
+        logging.error(json.dumps(data, indent=2))
         queue.append(estring)
         queue.append(utils.FINISH_TOKEN)
         return

@@ -23,8 +23,11 @@ with openai_tab:
     openai_key = ''
     if os.path.exists(openai_key_file):
         openai_key = utils.get_openai_key(st.session_state.name, fallback=False)
-    openai_key = st.text_input('请输入OpenAI的秘钥', type='password', value=openai_key, help='从[这个](https://beta.openai.com/account/api-keys)页面获取秘钥')
+    openai_key = st.text_input('请输入OpenAI的秘钥', type='password', 
+                               placeholder='sk-*******', value=openai_key, 
+                               help='从[这个](https://beta.openai.com/account/api-keys)页面获取秘钥')
     if st.button('保存', key='save_openai_key'):
+        utils.get_openai_key.clear_cache()
         if not openai_key and os.path.exists(openai_key_file):
             # 清除秘钥
             os.remove(openai_key_file)
@@ -36,10 +39,9 @@ with openai_tab:
                 'openai_key': openai_key
             }
             json.dump(key_json, open(openai_key_file, 'w'))
-            utils.get_openai_key.clear_cache()
             st.success('秘钥已保存')
             time.sleep(1)
-            st.experimental_rerun()
+        st.experimental_rerun()
     
         
 with bing_tab:
@@ -78,7 +80,7 @@ with bing_tab:
                                   help=bing_instruction)
     if bingai_cookies and st.button('保存', key='save_bingai_key'):
         os.makedirs(f'secrets/{st.session_state.name}', exist_ok=True)
-        print(bingai_cookies)
+        # print(bingai_cookies)
         # json.dump(bingai_cookies, open(bing_key_file, 'w'), indent=4)
         try:
             json.loads(bingai_cookies)
@@ -98,3 +100,4 @@ cm = stx.CookieManager()
 if st.button('退出登录'):
     cm.delete(utils.LOGIN_CODE)
     del st.session_state.name
+    del st.session_state.conversation

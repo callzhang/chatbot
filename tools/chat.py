@@ -19,7 +19,7 @@ suggestion_prompt = {"role": "system", "content": f'请在你的回答的最后�
 
 staff_prompt = lambda name: [{"role": "assistant", "content": f"你好，{name}，请问有什么可以帮助你？"}]
 guest_prompt = lambda name: [{"role": "system", "content": f'用户是访客，名字为{name}，请用非常精简的方式回答问题。'},
-                             {'role': 'assistant', 'content': '欢迎您，访客！'}]
+                             {'role': 'assistant', 'content': f'欢迎您，{name}！'}]
 
 
 
@@ -55,9 +55,11 @@ def get_dialog_file(name, title):
     dialog = history.query('title==@title')
     if len(dialog):
         chat_file = dialog.iloc[0]['file']
+        return chat_file
     else:
-        chat_file = history.iloc[0]['file']
-    return chat_file
+        # 如果没有找到，则返回第一条结果?
+        # chat_file = history.iloc[0]['file']
+        return None
 
 # dialog
 def get_dialog_history(name):

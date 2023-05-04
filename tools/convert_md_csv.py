@@ -1,4 +1,5 @@
-import os, pandas as pd, sys, re, datetime, shutil
+import os, pandas as pd, sys, re, shutil
+from datetime import datetime
 from pathlib import Path
 from . import utils
 from collections import defaultdict
@@ -63,7 +64,7 @@ def get_history(name, to_dict=False):
             print(f'empty chat: {chat}')
             continue
         if datetime_str:
-            t = datetime.datetime.strptime(datetime_str[0][1:-1], '%Y-%m-%d %H:%M:%S')
+            t = datetime.strptime(datetime_str[0][1:-1], '%Y-%m-%d %H:%M:%S')
             date_str = t.strftime('%Y-%m-%d')
         elif chat.strip():
             date_str = '无日期'

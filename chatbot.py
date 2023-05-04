@@ -30,19 +30,18 @@ if 'name' not in st.session_state:
     if code:
         user_db = utils.get_db()
         access_data = user_db.query('访问码==@code')
+        exp_date = datetime.now() + timedelta(days=30)
         if len(access_data):
             st.session_state.name = access_data['姓名'].iloc[0]
             expiration = access_data['截止日期'].iloc[0]
             if datetime.now().date() < expiration:
                 # login success
                 st.session_state.guest = False
-                exp_date = datetime.now() + timedelta(days=30)
                 if exp_date.date() > expiration:
                     exp_date = datetime(expiration.year, expiration.month, expiration.day, 23, 59, 59)
-                cm.set(utils.LOGIN_CODE, code, expires_at=exp_date)
         else:
             st.session_state.name = code
-            cm.delete(utils.LOGIN_CODE)
+        cm.set(utils.LOGIN_CODE, code, expires_at=exp_date)
         st.experimental_rerun()
     st.stop()
     
@@ -239,7 +238,7 @@ for i, c in enumerate(st.session_state.conversation):
             # 渲染
             content = c['content'].replace(utils.SUGGESTION_TOKEN, '')
             message(content, key=str(i), avatar_style='jdenticon')
-            time.sleep(0.3)
+            time.sleep(0.1)
             st.experimental_rerun()
         else:
             # 结束
