@@ -6,42 +6,54 @@ from datetime import datetime, timedelta
 # from streamlit_extras.colored_header import colored_header
 from streamlit_extras.buy_me_a_coffee import button
 import extra_streamlit_components as stx
+# from orm information module
+from infrastructure.data_objects.uesr_info import UserInfo
+from infrastructure.data_objects.dialog_info import DialogInfo
+from infrastructure.data_objects.conversation_log import ConversationLog
+# from dict module
+from dictionaries.common import authorization as auth_dict
 
 # 初始化
 if 'layout' not in st.session_state:
     st.session_state.layout = 'centered'
-st.set_page_config(page_title="💬星尘小助手", page_icon="💬",
-                   layout=st.session_state.layout, 
-                   initial_sidebar_state="auto", menu_items={
-             'Get Help': 'https://stardust.ai',
-            #  'Report a bug': "https://www.extremelycoolapp.com/bug",
-             'About': "# 星尘小助手. \n *仅限员工使用，请勿外传!*"
-    })
+st.set_page_config(
+    page_title="💬星尘小助手",
+    page_icon="💬",
+    layout=st.session_state.layout,
+    initial_sidebar_state="auto",
+    menu_items={
+        'Get Help': 'https://stardust.ai',
+        #  'Report a bug': "https://www.extremelycoolapp.com/bug",
+        'About': "# 星尘小助手. \n *仅限内部员工使用，请勿外传!*"
+    }
+)
 st.title("💬星尘小助手")
 
 ## user auth
 if 'name' not in st.session_state:
+    cookie_manage = stx.CookieManager()
     st.session_state.guest = True
-    cm = stx.CookieManager()
-    code = cm.get(utils.LOGIN_CODE)
+    code = cookie_manage.get(auth_dict['LOGIN_CODE'])
     if not code:
         st.info('我是一个集成多个聊天机器人能力的小助手，希望能帮助你提高工作效率😊')
         code = st.text_input('请输入你的访问码', help='仅限员工使用，请勿外传！')
     if code:
-        user_db = utils.get_db()
-        access_data = user_db.query('访问码==@code')
-        exp_date = datetime.now() + timedelta(days=30)
-        if len(access_data):
-            st.session_state.name = access_data['姓名'].iloc[0]
-            expiration = access_data['截止日期'].iloc[0]
-            if datetime.now().date() < expiration:
+        _result_user_info = UserInfo.get_user_by_real_name(code)
+        now_date = datetime.now()
+        cookie_exp_date = now_date + timedelta(days=30)
+        if _result_user_info is not None:
+            st.session_state.name = {_result_user_info.username}
+            st.session_state.user_id = {_result_user_info.id}
+            expiration = {_result_user_info.expiration_time}
+            if now_date.date() < expiration:
                 # login success
                 st.session_state.guest = False
-                if exp_date.date() > expiration:
-                    exp_date = datetime(expiration.year, expiration.month, expiration.day, 23, 59, 59)
+                if cookie_exp_date.date() > expiration:
+                    # flush cookie exp time
+                    cookie_exp_date = datetime(expiration.year, expiration.month, expiration.day, 23, 59, 59)
         else:
             st.session_state.name = code
-        cm.set(utils.LOGIN_CODE, code, expires_at=exp_date)
+        cookie_manage.set(auth_dict['LOGIN_CODE'], code, expires_at=cookie_exp_date)
         st.experimental_rerun()
     st.stop()
     
@@ -50,9 +62,11 @@ if 'name' not in st.session_state:
 # conversation: 对话的具体内容列表，[{role, name, time, content, suggestion},...]
 if "conversation" not in st.session_state:
     # 初始化当前对话
-    chat_history = chat.get_dialog_history(st.session_state.name)
+    # chat_history = chat.get_dialog_history(st.session_state.name)
     # 初始化对话列表
-    st.session_state.chat_titles = chat_history['title'].tolist()
+    # st.session_state.chat_titles = chat_history['title'].tolist()
+    # Show conversation history
+    st.session_state.chat_titles = DialogInfo.get_all_dialog_by_user_id(st.session_state.user_id)
     # 没有历史记录或创建新对话，增加“新对话”至title
     if not st.session_state.chat_titles:
         chat.new_dialog(st.session_state.name)
@@ -83,10 +97,13 @@ if st.session_state.guest:
 # 聊天历史列表
 def on_conversation_change():
     del st.session_state.conversation
-selected_title = st.sidebar.radio('聊天历史', 
-                                  st.session_state.chat_titles, 0, 
-                                  key='chat_title_selection', 
-                                  on_change=on_conversation_change)
+selected_title = st.sidebar.radio(
+    '聊天历史',
+    st.session_state.chat_titles,
+    0,
+    key='chat_title_selection',
+    on_change=on_conversation_change
+)
 # 对文本输入进行应答
 def gen_response(query=None):
     # remove suggestion
@@ -338,11 +355,11 @@ with c2: # 删除
         st.experimental_rerun()
 with c3: # 导出
     if st.download_button(label='📤', help='导出对话',
-                        data=utils.conversation2markdown(st.session_state.conversation, st.session_state.name), 
+                        data=utils.conversation2markdown(st.session_state.conversation, st.session_state.name),
                         file_name=f'history.md',
                         mime='text/markdown'):
         st.success('导出成功！')
-        
+
 with c4: # 修改
     def update_title():
         del st.session_state.conversation

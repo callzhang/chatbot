@@ -1,6 +1,11 @@
 # chatbot
 chatbot using ChatGPT
 
+# Key term modeling
+1. conversation:
+2. dialog: 
+3. user: use chatbot's user, just stardust's employee now
+
 # change log
 
 ### 1.0 RELEASE

@@ -41,9 +41,25 @@ class Database:
         self.session.add(record)
         self.session.commit()
 
-    def update(self, table, id, **kwargs):
-        self.session.query(table).filter_by(id=id).update(kwargs)
-        self.session.commit()
+    def update_one(self, model, filter_dict, update_dict):
+        try:
+            self.session.query(model).filter_by(**filter_dict).update(update_dict)
+            self.session.commit()
+        except Exception as e:
+            self.session.rollback()
+            raise e
+        finally:
+            self.session.close()
+    
+    def update_batch(self, model, filter_dict, update_dict):
+        try:
+            self.session.query(model).filter_by(**filter_dict).update(update_dict, synchronize_session=False)
+            self.session.commit()
+        except Exception as e:
+            self.session.rollback()
+            raise e
+        finally:
+            self.session.close()
 
     def delete(self, record):
         self.session.delete(record)

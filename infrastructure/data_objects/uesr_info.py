@@ -25,6 +25,8 @@ class UserInfo(Base):
                        server_default='', comment='真实姓名')
     register_time = Column(TIMESTAMP, nullable=False,
                            server_default='CURRENT_TIMESTAMP', comment='注册时间')
+    expiration_time = Column(TIMESTAMP, server_default='CURRENT_TIMESTAMP',
+                              comment='可用期限(账号到期时间)')
 
     """
     根据real_name查询用户详情
