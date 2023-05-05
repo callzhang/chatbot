@@ -11,3 +11,4 @@ transformers
 gradio
 shillelagh[all]
 extra_streamlit_components
+sqlalchemy

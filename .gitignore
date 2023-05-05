@@ -6,3 +6,4 @@ secrets/
 test/
 .DS_Store
 archieve/
+config/config.ini
