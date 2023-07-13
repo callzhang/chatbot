@@ -1,5 +1,5 @@
 import streamlit as st, pandas as pd
-from streamlit_chat import message
+# from streamlit_chat import message
 from tools import imagegen, asr, openai, utils, bing, chat
 import time, logging
 from datetime import datetime, timedelta
@@ -30,7 +30,7 @@ if 'name' not in st.session_state:
     if code:
         user_db = utils.get_db()
         access_data = user_db.query('访问码==@code')
-        exp_date = datetime.now() + timedelta(days=30)
+        exp_date = datetime.now() + timedelta(days=10)
         if len(access_data):
             st.session_state.name = access_data['姓名'].iloc[0]
             expiration = access_data['截止日期'].iloc[0]
@@ -62,6 +62,8 @@ if "conversation" not in st.session_state:
         del st.session_state.new_chat
     elif 'chat_title_selection' in st.session_state:
         selected_title = st.session_state.chat_title_selection
+        if selected_title not in st.session_state.chat_titles:
+            selected_title = st.session_state.chat_titles[0]
     else:
         selected_title = st.session_state.chat_titles[0]
         
@@ -76,10 +78,8 @@ if "conversation" not in st.session_state:
     st.session_state.conversation += conversation
     
 
-## UI
-if st.session_state.guest:
-    st.info('访客模式：支持最大10轮对话和20轮聊天历史')
-    
+##---- UI -----
+task = st.selectbox('选择功能', ['对话', 'BingAI', '文字做图', '语音识别'], key='task', label_visibility='collapsed')
 # 聊天历史列表
 def on_conversation_change():
     del st.session_state.conversation
@@ -87,8 +87,13 @@ selected_title = st.sidebar.radio('聊天历史',
                                   st.session_state.chat_titles, 0, 
                                   key='chat_title_selection', 
                                   on_change=on_conversation_change)
+
+if st.session_state.guest:
+    st.info('访客模式：支持最大10轮对话和20轮聊天历史')
+    
 # 对文本输入进行应答
 def gen_response(query=None):
+    print('gen_response')
     # remove suggestion
     if 'suggestions' in st.session_state.conversation[-1]:
         st.session_state.conversation[-1].pop('suggestions')
@@ -97,11 +102,11 @@ def gen_response(query=None):
         
     # get task and input
     task = st.session_state.task
-    if task in ['对话', '文字做图', 'GPT-4', '文心一言']:
+    if task in ['对话', '文字做图', 'BingAI', '文心一言']:
         user_input = query or st.session_state.input_text
         if user_input == '':
             return
-        st.session_state.input_text = ""
+        # st.session_state.input_text = ""
     elif task == '语音识别':
         audio_file = st.session_state.get('audio')
         if audio_file:
@@ -134,7 +139,7 @@ def gen_response(query=None):
                         }
         # chat = None
         st.session_state.conversation.append(bot_response)
-    elif task == 'GPT-4':
+    elif task == 'BingAI':
         if 'bing' not in st.session_state:
             logging.warning('Initiating BingAI, please wait...')
             # show loading
@@ -211,12 +216,17 @@ md_formated = ""
 for i, c in enumerate(st.session_state.conversation):
     role, content = c['role'], c['content']
     if role == "system":
-        continue
+        if st.session_state.name == 'Derek':
+            with st.chat_message('system'):
+                st.markdown(content)
     elif role == 'server':# not implemented
-        message(content, is_user=False, key=str(i))
+        with st.chat_message('server'):
+            st.markdown(content)
     elif role == "user":
-        message(content, is_user=True, key=str(i),
-                avatar_style='initials', seed=st.session_state.name[-2:])
+        with st.chat_message('user'):
+            st.markdown(content)
+            # message(content, is_user=True, key=str(i),
+            #         avatar_style='initials', seed=st.session_state.name[-2:])
     elif role == "assistant":
         queue = c.get('queue')
         if queue is not None:
@@ -237,7 +247,9 @@ for i, c in enumerate(st.session_state.conversation):
                 
             # 渲染
             content = c['content'].replace(utils.SUGGESTION_TOKEN, '')
-            message(content, key=str(i), avatar_style='jdenticon')
+            # message(content, key=str(i), avatar_style='jdenticon')
+            with st.chat_message('assistant'):
+                st.markdown(content)
             time.sleep(0.1)
             st.experimental_rerun()
         else:
@@ -249,7 +261,9 @@ for i, c in enumerate(st.session_state.conversation):
                 content, suggestions = utils.parse_suggestions(content)
                 c['content'] = content
                 c['suggestions'] = suggestions
-            message(content, key=str(i), avatar_style='jdenticon')
+            # message(content, key=str(i), avatar_style='jdenticon')
+            with st.chat_message('assistant'):
+                st.markdown(content)
             # seggestions
             if suggestions and i == len(st.session_state.conversation) -1:
                 cols = st.columns(len(suggestions))
@@ -267,7 +281,9 @@ for i, c in enumerate(st.session_state.conversation):
                 for action, token in actions.items():
                     st.button(action, on_click=handle_action, args=(token,))
     elif role == 'DALL·E':
-        message(c['content'], key=str(i), avatar_style='jdenticon')
+        # message(c['content'], key=str(i), avatar_style='jdenticon')
+        with st.chat_message('DALL·E'):
+            st.markdown(c['content'])
     elif role == 'audio':
         c1, c2 = st.columns([0.6,0.4])
         with c2:
@@ -281,40 +297,39 @@ for i, c in enumerate(st.session_state.conversation):
         st.experimental_rerun()
 
 # 添加文本输入框
-c1, c2 = st.columns([0.18,0.82])
-with c1:
-    task = st.selectbox('选择功能', ['对话', 'GPT-4', '文字做图', '语音识别'], key='task', label_visibility='collapsed')
-with c2:
-    # guest limit
-    if st.session_state.guest and len(st.session_state.conversation) > 10:
-        disabled, help = True, '访客不支持长对话，请联系管理员'
-    elif task == '对话':
-        disabled, help = False, '输入你的问题，然后按回车提交。'
-    elif task == '文心一言':
-        disabled, help = True, '文心一言功能暂未开放'
-    elif task == 'GPT-4':
-        if utils.get_bingai_key(st.session_state.name) is None:
-            disabled, help = True, '请先在设置中填写BingAI的秘钥'
-        else:
-            disabled, help = False, '输入你的问题，然后按回车提交给BingAI。'
-    elif task == '文字做图':
-        disabled, help = st.session_state.guest, '访客不支持文字做图'
-    elif task == '语音识别':
-        disabled, help = st.session_state.guest, '访客不支持语音识别'
+# c1, c2 = st.columns([0.18,0.82])
+# with c1:
+# task = st.selectbox('选择功能', ['对话', 'BingAI', '文字做图', '语音识别'], key='task', label_visibility='collapsed')
+# with c2:
+if st.session_state.guest and len(st.session_state.conversation) > 10:
+    disabled, help = True, '访客不支持长对话，请联系管理员'
+elif task == '对话':
+    disabled, help = False, '输入你的问题，然后按回车提交。'
+elif task == '文心一言':
+    disabled, help = True, '文心一言功能暂未开放'
+elif task == 'BingAI':
+    if utils.get_bingai_key(st.session_state.name) is None:
+        disabled, help = True, '请先在设置中填写BingAI的秘钥'
     else:
-        raise NotImplementedError(task)
-    # 输入框
-    if task in ['对话', '文字做图', 'GPT-4', '文心一言']:
-        user_input = st.text_input(label="输入你的问题：", placeholder=help,
-                            help=help,
-                            max_chars=100 if st.session_state.guest else 000,
-                            key='input_text', disabled=disabled,
-                            label_visibility='collapsed',
-                            on_change=gen_response)
-    elif task == '语音识别':
-        audio_file = st.file_uploader('上传语音文件', type=asr.accepted_types, key='audio', on_change=gen_response, disabled=disabled)
-    else:
-        raise NotImplementedError(task)
+        disabled, help = False, '输入你的问题，然后按回车提交给BingAI。'
+elif task == '文字做图':
+    disabled, help = st.session_state.guest, '访客不支持文字做图'
+elif task == '语音识别':
+    disabled, help = st.session_state.guest, '访客不支持语音识别'
+else:
+    raise NotImplementedError(task)
+# 输入框
+if task in ['对话', '文字做图', 'BingAI', '文心一言']:
+    prompt = st.chat_input(placeholder=help,
+                  key='input_text', 
+                    disabled=disabled,
+                    max_chars=1000,
+                    on_submit=gen_response
+                )
+elif task == '语音识别':
+    audio_file = st.file_uploader('上传语音文件', type=asr.accepted_types, key='audio', on_change=gen_response, disabled=disabled)
+else:
+    raise NotImplementedError(task)
 
 ## 聊天历史功能区
 c1, c2, c3, c4 = st.sidebar.columns(4)
@@ -348,18 +363,12 @@ with c4: # 修改
         del st.session_state.conversation
         new_title = st.session_state.new_title_text
         chat.edit_dialog_name(st.session_state.name, selected_title, new_title)
-        # st.experimental_rerun()
     if st.button('✏️', help='修改对话名称'):
         new_title = st.sidebar.text_input('修改名称', selected_title, help='修改当前对话标题', key='new_title_text', on_change=update_title)
         
         
-# debug        
-if st.session_state.name == "Derek":
-    if st.button('👨‍💻', key='dev', help='开发者信息'):
-        # st.markdown(st.session_state.conversation)
-        pass
-        
 from streamlit_extras.add_vertical_space import add_vertical_space
-add_vertical_space(20)
 # buy me a coffee
-button(username="derekz", floating=False, width=221)
+with st.sidebar:
+    add_vertical_space(5)
+    button(username="derekz", floating=False, width=221)

@@ -141,16 +141,17 @@ def get_openai_key(username, fallback=True):
     return key
 
 @cached()
-def get_bingai_key(username, file_only=False):
+def get_bingai_key(username, return_json=False):
     bing_key_file = f'secrets/{username}/bing_key.json'
     if not os.path.exists(bing_key_file):
         return None
     print(f'bing_key_file: {bing_key_file}')
-    if file_only:
-        return bing_key_file
     with open(bing_key_file, 'r') as f:
         key = f.read()
-    return key
+    if return_json:
+        return json.loads(key)
+    else:
+        return key
 
 ## user auth
 sheet_url = st.secrets["public_gsheets_url"]

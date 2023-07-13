@@ -1,5 +1,5 @@
 import asyncio, pprint, logging
-from EdgeGPT import Chatbot, ConversationStyle
+from EdgeGPT.EdgeGPT import Chatbot, ConversationStyle
 from collections import deque
 import threading, json
 try:
@@ -14,15 +14,16 @@ class BingAI:
         self.bot = None
         self.style = style
         self.name = name
-        self.renew()
+        asyncio.run(self.renew())
         
     def __del__(self):
         asyncio.run(self.close())
         
         
-    def renew(self):
+    async def renew(self):
         try:
-            self.bot = Chatbot(cookiePath=utils.get_bingai_key(self.name, file_only=True))
+            cookies = utils.get_bingai_key(self.name, return_json=True)
+            self.bot = await Chatbot.create(cookies=cookies)
         except Exception as e:
             logging.error(f'创建bing实例出错：\n{e}')
             
@@ -37,7 +38,7 @@ class BingAI:
     async def chat_async(self, queue: deque, prompt: str):
         tried = 0
         while not self.bot:
-            self.renew()
+            await self.renew()
             tried += 1
             if tried > 2:
                 # 如果仍然不行，则认为账户失效
@@ -53,11 +54,14 @@ class BingAI:
                 message = response
             else:
                 print('')
-                # pprint.pprint(response)
-                suggestions = [r['text'] for r in response['item']
-                               ['messages'][1]['suggestedResponses']]
-                print(f'{utils.SUGGESTION_TOKEN}:  {suggestions}')
-                queue.append(f'{utils.SUGGESTION_TOKEN}: {json.dumps(suggestions)}')
+                try:
+                    suggestions = [r['text'] for r in response['item']['messages'][1]['suggestedResponses']]
+                    print(f'{utils.SUGGESTION_TOKEN}:  {suggestions}')
+                    queue.append(f'{utils.SUGGESTION_TOKEN}: {json.dumps(suggestions)}')
+                except:
+                    if response['item']['result']['value'] == 'InvalidSession':
+                        logging.error(response['item']['result']['message'])
+                        self.renew()
                 queue.append(utils.FINISH_TOKEN)
                 print('-'*60)
                 break

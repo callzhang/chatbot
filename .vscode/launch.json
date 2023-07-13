@@ -17,7 +17,7 @@
             "type": "python",
             "request": "launch",
             "module": "streamlit",
-            "justMyCode": true,
+            "justMyCode": false,
             "args": [
                 "run",
                 "chatbot.py",

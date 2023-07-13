@@ -3,8 +3,9 @@ import requests, json, re, logging
 # import streamlit as st
 import threading
 from collections import deque
-from . import utils, chat
+from enum import Enum, unique
 try:
+    from . import utils, chat
     from transformers import AutoTokenizer
     tokenizer = AutoTokenizer.from_pretrained("gpt2")
 except:
@@ -16,6 +17,23 @@ model = 'gpt-3.5-turbo'  # gpt-3.5-turbo-0301
 temperature = 0.7
 roles2keep = ['system', 'user', 'assistant']
 keys_keep = ['role', 'content']
+
+@unique
+class Task(Enum): # 还没用
+    chat = '对话'
+    BingAI = 'BingAI'
+    text2img = '文字做图'
+    ASR = '语音识别'
+    @classmethod
+    def names(cls):
+        return [c.name for c in cls]
+    @classmethod
+    def values(cls):
+        return [c.value for c in cls]
+    
+if __name__ == '__main__':
+    print(Task.names())
+    print(Task.values())
 
 def chat_len(conversations):
     chat_string = ' '.join(c['content'] for c in conversations)
