@@ -11,7 +11,7 @@ import extra_streamlit_components as stx
 if 'layout' not in st.session_state:
     st.session_state.layout = 'centered'
 st.set_page_config(page_title="💬星尘小助手", page_icon="💬",
-                   layout=st.session_state.layout, 
+                   layout='centered', 
                    initial_sidebar_state="auto", menu_items={
              'Get Help': 'https://stardust.ai',
             #  'Report a bug': "https://www.extremelycoolapp.com/bug",
@@ -167,8 +167,8 @@ def gen_response(query=None):
                 'time': datetime.now()
             }
             st.session_state.conversation.append(bot_response)
-            chat.update_conversation(st.session_state.name, selected_title, chat)
-            print(f'DALL·E: {chat}')
+            chat.update_conversation(st.session_state.name, selected_title, bot_response)
+            print(f'DALL·E: {urls_md}')
             print('-'*50)
     elif task == '语音识别':
         with st.spinner('正在识别'):
@@ -249,7 +249,7 @@ for i, c in enumerate(st.session_state.conversation):
             content = c['content'].replace(utils.SUGGESTION_TOKEN, '')
             # message(content, key=str(i), avatar_style='jdenticon')
             with st.chat_message('assistant'):
-                st.markdown(content)
+                st.markdown(content + "▌")
             time.sleep(0.1)
             st.experimental_rerun()
         else:
@@ -289,7 +289,9 @@ for i, c in enumerate(st.session_state.conversation):
         with c2:
             st.audio(content)
     else:
-        raise Exception(c)
+        #raise Exception(c)
+        with st.chat_message('error'):
+            st.markdown(str(c))
 
     # page layout
     if st.session_state.layout != 'wide' and c['role']=='assistant' and len(c['content']) > utils.WIDE_LAYOUT_THRESHOLD:
@@ -313,9 +315,11 @@ elif task == 'BingAI':
     else:
         disabled, help = False, '输入你的问题，然后按回车提交给BingAI。'
 elif task == '文字做图':
-    disabled, help = st.session_state.guest, '访客不支持文字做图'
+    disabled = st.session_state.guest
+    help = '访客不支持文字做图' if st.session_state.guest else '输入你的prompt'
 elif task == '语音识别':
-    disabled, help = st.session_state.guest, '访客不支持语音识别'
+    disabled = st.session_state.guest
+    help = '访客不支持语音识别' if st.session_state.guest else '上传语音文件'
 else:
     raise NotImplementedError(task)
 # 输入框
@@ -323,7 +327,7 @@ if task in ['对话', '文字做图', 'BingAI', '文心一言']:
     prompt = st.chat_input(placeholder=help,
                   key='input_text', 
                     disabled=disabled,
-                    max_chars=1000,
+                    # max_chars=1000,
                     on_submit=gen_response
                 )
 elif task == '语音识别':

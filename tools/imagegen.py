@@ -33,8 +33,10 @@ def gen_image(prompt):
         "n": 1,
         "size": "1024x1024" #1024x1024
     }
-    res = requests.post(url, headers=header, json=data)
-    urls = [r['url'] for r in res.json()['data']]
+    res = requests.post(url, headers=header, json=data).json()
+    if 'error' in res:
+        return res['error']['message']
+    urls = [r['url'] for r in res['data']]
     return url2markdown(urls)
 
 

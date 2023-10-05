@@ -134,8 +134,8 @@ def get_response(header, data, queue):
             except Exception as e:
                 print(e)
     else:
-        estring = f'出错啦，请重试: {response.status_code}, {response.reason}'
-        logging.error(json.dumps(data, indent=2))
+        estring = f'出错啦，请重试: {response.status_code}, {response.text}'
+        logging.error(json.dumps(data, indent=2, ensure_ascii=False))
         queue.append(estring)
         queue.append(utils.FINISH_TOKEN)
         return

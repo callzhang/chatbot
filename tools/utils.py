@@ -57,6 +57,8 @@ def conversation2markdown(conversation, title=""):
             md_formated += f"""星尘小助手({name}): {content}\n\n"""
         elif role == "DALL·E":
             md_formated += f"""星尘小助手({name}): {content}\n\n"""
+        elif role == '':
+            pass
         else:
             raise Exception(f'Unhandled chat: {c}')
     return md_formated.encode('utf-8').decode()
