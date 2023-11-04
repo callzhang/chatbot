@@ -1,11 +1,9 @@
 from retry import retry
 import requests, json, re, logging
-# import streamlit as st
 import threading
 from collections import deque
-from enum import Enum, unique
+from . import utils, chat
 try:
-    from . import utils, chat
     from transformers import AutoTokenizer
     tokenizer = AutoTokenizer.from_pretrained("gpt2")
 except:
@@ -13,35 +11,23 @@ except:
 
 # 参数
 task_params = {
-    'ChatGPT': {
+    utils.Task.ChatGPT.value: {
         'model': 'gpt-3.5-turbo',
         'url': 'https://api.openai.com/v1/chat/completions'
     },
-    'GPT4': {
+    utils.Task.GPT4.value: {
         'model': 'gpt-4',
         'url': 'https://yeqiu-gpt4-3.xyhelper.cn/v1/chat/completions'
+    },
+    utils.Task.GPT4V.value: {
+        'model': 'gpt-4v',
+        'url': 'http://121.127.44.50:8100/v1/chat/gpt4v'
     }
 }
 temperature = 0.7
 roles2keep = ['system', 'user', 'assistant']
 keys_keep = ['role', 'content']
 
-@unique
-class Task(Enum): # 还没用
-    chat = '对话'
-    BingAI = 'BingAI'
-    text2img = '文字做图'
-    ASR = '语音识别'
-    @classmethod
-    def names(cls):
-        return [c.name for c in cls]
-    @classmethod
-    def values(cls):
-        return [c.value for c in cls]
-    
-if __name__ == '__main__':
-    print(Task.names())
-    print(Task.values())
 
 def chat_len(conversations):
     chat_string = ' '.join(c['content'] for c in conversations)
@@ -68,14 +54,17 @@ def history2chat(history:list[dict]) -> list[list]:
     return chatbot
 
 # receiving streaming server-sent events（异步）
-def chat_stream(conversations:list, username:str, task:str, guest=True):
+def chat_stream(conversations:list, username:str, task:str, attachment=None, guest=True):
     max_length = 500 if guest else 2000
-    chat_history = [{k: c[k] for k in keys_keep}
-                    for c in conversations if c['role'] in roles2keep]
-    while chat_len(chat_history) > max_length and len(chat_history) > 1:
-        chat_history.pop(0)
-    chat_history.append(chat.suggestion_prompt)
-    print(f'sending conversations rounds: {len(chat_history)}, length:{chat_len(chat_history)}')
+    if not isinstance(conversations, str):
+        chat_history = [{k: c[k] for k in keys_keep}
+                        for c in conversations if c['role'] in roles2keep]
+        while chat_len(chat_history) > max_length and len(chat_history) > 1:
+            chat_history.pop(0)
+        chat_history.append(chat.suggestion_prompt)
+        print(f'sending conversations rounds: {len(chat_history)}, length:{chat_len(chat_history)}')
+    else:
+        chat_history = conversations
     # create a queue to store the responses
     queue = deque()
     
@@ -88,6 +77,7 @@ def chat_stream(conversations:list, username:str, task:str, guest=True):
         # 'temperature': temperature,
         'url': url,
         'model': model,
+        'file': attachment
     }
     header = {
         'Content-Type': 'application/json',
@@ -99,34 +89,16 @@ def chat_stream(conversations:list, username:str, task:str, guest=True):
     thread.start()
     return queue
     
-    
-## OpenAI请求(同步)
-# @retry(tries=3, delay=1)
-# def chat(conversations):
-#     max_length = 500 if st.session_state.guest else 2000
-#     # 过滤
-#     chat_history = [{k: c[k] for k in keys_keep}
-#                     for c in conversations if c['role'] in roles2keep]
-#     while chat_len(chat_history) > max_length:
-#         chat_history.pop(0)
-#     data = {
-#         'model': model,
-#         'messages': chat_history,
-#         # 'temperature': temperature,
-#     }
-#     header = {
-#         'Content-Type': 'application/json',
-#         'Authorization': f'Bearer {utils.get_openai_key()}'
-#     }
-#     res = requests.post(url, headers=header, json=data)
-#     choices = res.json()['choices']
-#     message = choices[0]['message']
-#     return message
-
 
 def get_response(header, data, queue):
     url = data.pop('url')
-    response = requests.post(url, headers=header, json=data, stream=True, timeout=60)
+    file = data.pop('file')
+    if not file:
+        response = requests.post(url, headers=header, json=data, stream=True, timeout=60)
+    else: # gpt4v
+        data2 = {'stream': True}
+        data2['message'] = data['messages']
+        response = requests.post(url, headers=header, data=data2, files=file, stream=True, timeout=60)
     if response.ok:
         for line in response.iter_lines():
             if not line:
@@ -172,4 +144,9 @@ def is_markdown(text):
     is_md = any(matches)
     return is_md
 
-
+if __name__ == '__main__':
+    # WIP: test gpt4v
+    messages = '请识别图中所有物体，并理解它们的关系。'
+    with open('temp/CF49A632-6E10-4AA3-944F-F4FDA54AF003.png', 'rb') as f:
+        attachment = f.read()
+    chat_stream(messages, username='test', task='GPT4V', attachment=attachment)

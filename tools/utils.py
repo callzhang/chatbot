@@ -6,6 +6,7 @@ from pathlib import Path
 from retry import retry
 from functools import wraps
 from collections import defaultdict
+from enum import Enum, unique
 
 WIDE_LAYOUT_THRESHOLD = 1000
 SUGGESTION_TOKEN = '[SUGGESTION]'
@@ -13,6 +14,32 @@ FINISH_TOKEN = 'data: [DONE]'
 RETRY_TOKEN = '[RETRY]'
 TIMEOUT = 30
 LOGIN_CODE = 'login_code'
+
+
+@unique
+class Task(Enum):
+    ChatGPT = '对话'
+    GPT4 = 'GPT4'
+    GPT4V = 'GPT4V'
+    BingAI = 'BingAI'
+    text2img = '文字做图'
+    ASR = '语音识别'
+    @classmethod
+    def names(cls):
+        return [c.name for c in cls]
+    @classmethod
+    def values(cls):
+        return [c.value for c in cls]
+    
+@unique
+class Role(Enum):
+    server = '服务器'
+    user = '用户'
+    assistant = '星尘小助手'
+    system = '系统'
+    audio = '语音'
+    DALL·E = 'DALL·E'
+    
 
 
 ## cache management
@@ -166,14 +193,16 @@ from shillelagh.backends.apsw.db import connect
 @cached(timeout=600)
 @retry(tries=3, delay=2, backoff=2)
 def get_db():
-    print('connecting to google sheet...')
+    msg = st.toast('正在连接数据库，请稍等...')
     conn = connect(":memory:")
     cursor = conn.cursor()
     query = f'SELECT * FROM "{sheet_url}"'
     rows = cursor.execute(query)
     rows = rows.fetchall()
     df = pd.DataFrame(rows, columns=['姓名', '访问码', '截止日期'])
+    msg.toast('数据库连接成功！')
     print(f'Fetched {len(df)} records')
+    time.sleep(1)
     return df
 
 

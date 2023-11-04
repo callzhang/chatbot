@@ -22,7 +22,7 @@ with openai_tab:
     st.checkbox('OpenAI秘钥已保存', value=os.path.exists(openai_key_file), disabled=True)
     openai_key = ''
     if os.path.exists(openai_key_file):
-        openai_key = utils.get_openai_key(st.session_state.name, fallback=False)
+        openai_key = utils.get_openai_key(st.session_state.name)
     openai_key = st.text_input('请输入OpenAI的秘钥', type='password', 
                                placeholder='sk-*******', value=openai_key, 
                                help='从[这个](https://beta.openai.com/account/api-keys)页面获取秘钥')
@@ -41,7 +41,7 @@ with openai_tab:
             json.dump(key_json, open(openai_key_file, 'w'))
             st.success('秘钥已保存')
             time.sleep(1)
-        st.experimental_rerun()
+        st.rerun()
     
         
 with bing_tab:
@@ -92,7 +92,7 @@ with bing_tab:
         utils.get_bingai_key.clear_cache()
         st.success('BingAI cookies已保存')
         time.sleep(1)
-        st.experimental_rerun()
+        st.rerun()
     
 
 # log out

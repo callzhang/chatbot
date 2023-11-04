@@ -8,6 +8,8 @@ from streamlit_extras.buy_me_a_coffee import button
 import extra_streamlit_components as stx
 
 # 初始化
+Task = utils.Task
+Role = utils.Role
 if 'layout' not in st.session_state:
     st.session_state.layout = 'centered'
 st.set_page_config(page_title="💬星尘小助手", page_icon="💬",
@@ -18,10 +20,6 @@ st.set_page_config(page_title="💬星尘小助手", page_icon="💬",
              'About': "# 星尘小助手. \n *仅限员工使用，请勿外传!*"
     })
 st.title("💬星尘小助手")
-# 通知
-with open('README.md', 'r') as f:
-    readme = f.read()
-    st.toast(readme, icon='😍')
     
 ## user auth
 if 'name' not in st.session_state:
@@ -46,7 +44,7 @@ if 'name' not in st.session_state:
         else:
             st.session_state.name = code
         cm.set(utils.LOGIN_CODE, code, expires_at=exp_date)
-        st.experimental_rerun()
+        st.rerun()
     st.stop()
     
 ## dialog history management
@@ -60,7 +58,7 @@ if "conversation" not in st.session_state:
     # 没有历史记录或创建新对话，增加“新对话”至title
     if not st.session_state.chat_titles:
         chat.new_dialog(st.session_state.name)
-        st.experimental_rerun()
+        st.rerun()
     elif 'new_chat' in st.session_state:
         selected_title = st.session_state.new_chat
         del st.session_state.new_chat
@@ -83,7 +81,7 @@ if "conversation" not in st.session_state:
     
 
 ##---- UI -----
-task = st.selectbox('选择功能', ['ChatGPT', 'GPT4', 'BingAI', '文字做图', '语音识别'], key='task', label_visibility='collapsed')
+task = st.selectbox('选择功能', Task.values(), key='task', label_visibility='collapsed')
 # 聊天历史列表
 def on_conversation_change():
     del st.session_state.conversation
@@ -97,7 +95,6 @@ if st.session_state.guest:
     
 # 对文本输入进行应答
 def gen_response(query=None):
-    print('gen_response')
     # remove suggestion
     if 'suggestions' in st.session_state.conversation[-1]:
         st.session_state.conversation[-1].pop('suggestions')
@@ -106,15 +103,14 @@ def gen_response(query=None):
         
     # get task and input
     task = st.session_state.task
-    if task in ['ChatGPT', 'GPT4', '文字做图', 'BingAI', '文心一言']:
-        user_input = query or st.session_state.input_text
-        if user_input == '':
-            return
-        # st.session_state.input_text = ""
-    elif task == '语音识别':
+    if task == Task.ASR.value:
         audio_file = st.session_state.get('audio')
         if audio_file:
             user_input = audio_file.name
+    elif task in Task.values():
+        user_input = query or st.session_state.input_text
+        if user_input == '':
+            return
     else:
         raise NotImplementedError(task)
     
@@ -132,7 +128,7 @@ def gen_response(query=None):
     chat.update_conversation(st.session_state.name, selected_title, query_dict)
     
     # response
-    if task in ['ChatGPT', 'GPT4']:
+    if task in [Task.ChatGPT.value, Task.GPT4.value, Task.GPT4V.value]:
         queue = openai.chat_stream(conversations=st.session_state.conversation, 
                                    username=st.session_state.name, 
                                    task=task, 
@@ -142,11 +138,11 @@ def gen_response(query=None):
                         'queue': queue,
                         'time': datetime.now(),
                         'task': task,
-                        'name': 'ChatGPT'
+                        'name': task
                         }
         # chat = None
         st.session_state.conversation.append(bot_response)
-    elif task == 'BingAI':
+    elif task == Task.BingAI.value:
         if 'bing' not in st.session_state:
             logging.warning('Initiating BingAI, please wait...')
             # show loading
@@ -159,11 +155,11 @@ def gen_response(query=None):
                         'queue': queue, 
                         'thread': thread,
                         'time': datetime.now(),
-                        'name': 'BingAI'
+                        'name': task
                         }
         # chat = None
         st.session_state.conversation.append(bot_response)
-    elif task == '文字做图':
+    elif task == Task.text2img.value:
         with st.spinner('正在绘制'):
             urls_md = imagegen.gen_image(user_input)
             bot_response = {
@@ -222,18 +218,14 @@ def finish_reply(c, save_log=True):
 md_formated = ""
 for i, c in enumerate(st.session_state.conversation):
     role, content = c['role'], c['content']
-    if role == "system":
-        if st.session_state.name == 'Derek':
-            with st.chat_message('system'):
-                st.markdown(content)
+    if role == 'system':
+        pass
     elif role == 'server':# not implemented
         with st.chat_message('server'):
             st.markdown(content)
     elif role == "user":
         with st.chat_message('user'):
             st.markdown(content)
-            # message(content, is_user=True, key=str(i),
-            #         avatar_style='initials', seed=st.session_state.name[-2:])
     elif role == "assistant":
         queue = c.get('queue')
         if queue is not None:
@@ -242,7 +234,7 @@ for i, c in enumerate(st.session_state.conversation):
                 content = queue.popleft()
                 if content == utils.FINISH_TOKEN:
                     finish_reply(c)
-                    st.experimental_rerun()
+                    st.rerun()
                 else:
                     c['content'] += content
                     c['time'] = datetime.now()
@@ -258,7 +250,7 @@ for i, c in enumerate(st.session_state.conversation):
             with st.chat_message('assistant'):
                 st.markdown(content + "▌")
             time.sleep(0.1)
-            st.experimental_rerun()
+            st.rerun()
         else:
             # 结束
             content = c['content']
@@ -303,7 +295,7 @@ for i, c in enumerate(st.session_state.conversation):
     # page layout
     if st.session_state.layout != 'wide' and c['role']=='assistant' and len(c['content']) > utils.WIDE_LAYOUT_THRESHOLD:
         st.session_state.layout = 'wide'
-        st.experimental_rerun()
+        st.rerun()
 
 # 添加文本输入框
 # c1, c2 = st.columns([0.18,0.82])
@@ -312,36 +304,38 @@ for i, c in enumerate(st.session_state.conversation):
 # with c2:
 if st.session_state.guest and len(st.session_state.conversation) > 10:
     disabled, help = True, '访客不支持长对话，请联系管理员'
-elif task == 'ChatGPT':
+elif task == Task.ChatGPT.value:
     disabled, help = False, '输入你的问题，然后按回车提交。'
-elif task == 'GPT4':
+elif task == Task.GPT4.value:
     disabled, help = False, '输入你的问题，然后按回车提交。'
-elif task == '文心一言':
-    disabled, help = True, '文心一言功能暂未开放'
-elif task == 'BingAI':
+elif task == Task.GPT4V.value:
+    disabled, help = True, '(暂未开放）输入你的问题，并上传图片，然后按回车提交。'
+elif task == Task.BingAI.value:
     if utils.get_bingai_key(st.session_state.name) is None:
         disabled, help = True, '请先在设置中填写BingAI的秘钥'
     else:
         disabled, help = False, '输入你的问题，然后按回车提交给BingAI。'
-elif task == '文字做图':
+elif task == Task.text2img.value:
     disabled = st.session_state.guest
     help = '访客不支持文字做图' if st.session_state.guest else '输入你的prompt'
-elif task == '语音识别':
+elif task == Task.ASR.value:
     disabled = st.session_state.guest
     help = '访客不支持语音识别' if st.session_state.guest else '上传语音文件'
 else:
     raise NotImplementedError(task)
 
 # 输入框
-if task in ['ChatGPT', 'GPT4', '文字做图', 'BingAI', '文心一言']:
+if task == Task.ASR.value:
+    audio_file = st.file_uploader('上传语音文件', type=asr.accepted_types, key='audio', on_change=gen_response, disabled=disabled)
+elif task in Task.values():
     prompt = st.chat_input(placeholder=help,
                     key='input_text', 
                     disabled=disabled,
                     # max_chars=1000,
                     on_submit=gen_response
                 )
-elif task == '语音识别':
-    audio_file = st.file_uploader('上传语音文件', type=asr.accepted_types, key='audio', on_change=gen_response, disabled=disabled)
+    if task == Task.GPT4V.value:
+        image_file = st.file_uploader('上传图片', type=['png', 'jpg', 'jpeg'], key='image', disabled=disabled)
 else:
     raise NotImplementedError(task)
 
@@ -359,12 +353,12 @@ with c1: # 新对话
         st.session_state.new_chat = title
         st.session_state.audio = None
         st.session_state.layout = 'centered'
-        st.experimental_rerun()
+        st.rerun()
 with c2: # 删除
     if st.button('⛔', help='删除当前聊天记录', disabled=st.session_state.guest):
         del st.session_state.conversation
         chat.delete_dialog(st.session_state.name, selected_title)
-        st.experimental_rerun()
+        st.rerun()
 with c3: # 导出
     if st.download_button(label='📤', help='导出对话',
                         data=utils.conversation2markdown(st.session_state.conversation, st.session_state.name), 
@@ -386,3 +380,9 @@ from streamlit_extras.add_vertical_space import add_vertical_space
 with st.sidebar:
     add_vertical_space(5)
     button(username="derekz", floating=False, width=221)
+
+
+# 通知
+with open('README.md', 'r') as f:
+    readme = f.read()
+    st.toast(readme, icon='😍')
