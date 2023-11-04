@@ -18,7 +18,11 @@ st.set_page_config(page_title="💬星尘小助手", page_icon="💬",
              'About': "# 星尘小助手. \n *仅限员工使用，请勿外传!*"
     })
 st.title("💬星尘小助手")
-
+# 通知
+with open('README.md', 'r') as f:
+    readme = f.read()
+    st.toast(readme, icon='😍')
+    
 ## user auth
 if 'name' not in st.session_state:
     st.session_state.guest = True
@@ -79,7 +83,7 @@ if "conversation" not in st.session_state:
     
 
 ##---- UI -----
-task = st.selectbox('选择功能', ['对话', 'BingAI', '文字做图', '语音识别'], key='task', label_visibility='collapsed')
+task = st.selectbox('选择功能', ['ChatGPT', 'GPT4', 'BingAI', '文字做图', '语音识别'], key='task', label_visibility='collapsed')
 # 聊天历史列表
 def on_conversation_change():
     del st.session_state.conversation
@@ -102,7 +106,7 @@ def gen_response(query=None):
         
     # get task and input
     task = st.session_state.task
-    if task in ['对话', '文字做图', 'BingAI', '文心一言']:
+    if task in ['ChatGPT', 'GPT4', '文字做图', 'BingAI', '文心一言']:
         user_input = query or st.session_state.input_text
         if user_input == '':
             return
@@ -128,8 +132,11 @@ def gen_response(query=None):
     chat.update_conversation(st.session_state.name, selected_title, query_dict)
     
     # response
-    if task == '对话':
-        queue = openai.chat_stream(st.session_state.conversation, st.session_state.name, st.session_state.guest)
+    if task in ['ChatGPT', 'GPT4']:
+        queue = openai.chat_stream(conversations=st.session_state.conversation, 
+                                   username=st.session_state.name, 
+                                   task=task, 
+                                   guest=st.session_state.guest)
         bot_response = {'role': 'assistant', 
                         'content': '', 
                         'queue': queue,
@@ -301,11 +308,13 @@ for i, c in enumerate(st.session_state.conversation):
 # 添加文本输入框
 # c1, c2 = st.columns([0.18,0.82])
 # with c1:
-# task = st.selectbox('选择功能', ['对话', 'BingAI', '文字做图', '语音识别'], key='task', label_visibility='collapsed')
+# task = st.selectbox('选择功能', ['ChatGPT', 'GPT4', 'BingAI', '文字做图', '语音识别'], key='task', label_visibility='collapsed')
 # with c2:
 if st.session_state.guest and len(st.session_state.conversation) > 10:
     disabled, help = True, '访客不支持长对话，请联系管理员'
-elif task == '对话':
+elif task == 'ChatGPT':
+    disabled, help = False, '输入你的问题，然后按回车提交。'
+elif task == 'GPT4':
     disabled, help = False, '输入你的问题，然后按回车提交。'
 elif task == '文心一言':
     disabled, help = True, '文心一言功能暂未开放'
@@ -322,10 +331,11 @@ elif task == '语音识别':
     help = '访客不支持语音识别' if st.session_state.guest else '上传语音文件'
 else:
     raise NotImplementedError(task)
+
 # 输入框
-if task in ['对话', '文字做图', 'BingAI', '文心一言']:
+if task in ['ChatGPT', 'GPT4', '文字做图', 'BingAI', '文心一言']:
     prompt = st.chat_input(placeholder=help,
-                  key='input_text', 
+                    key='input_text', 
                     disabled=disabled,
                     # max_chars=1000,
                     on_submit=gen_response

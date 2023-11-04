@@ -126,20 +126,23 @@ def filter_suggestion(content:str):
 ## 管理秘钥
 import json, toml
 @cached()
-def default_key():
+def default_openai_key(task):
     with open('.streamlit/secrets.toml', 'r') as f:
         data = toml.load(f)
-    return data['key']
+    if task == 'GPT4':
+        key = data.get('gpt4-key')
+    else:
+        key = data.get(f'openai-key')
+    return key
 
 @cached()
-def get_openai_key(username, fallback=True):
+def get_openai_key(username, task=None):
     openai_key_file = f'secrets/{username}/openai_key.json'
-    if not os.path.exists(openai_key_file):
-        if fallback:
-            return default_key()
-        else:
-            return None
-    key = json.load(open(openai_key_file, 'r'))['openai_key']
+    if os.path.exists(openai_key_file):
+        key = json.load(open(openai_key_file, 'r'))['openai_key']
+    else:
+        # 只有在没有秘钥的时候才会使用默认秘钥，在这里可以拿到特殊GPT4秘钥
+        key = default_openai_key(task)
     return key
 
 @cached()

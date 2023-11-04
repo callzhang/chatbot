@@ -12,8 +12,16 @@ except:
     pass
 
 # 参数
-url = 'https://api.openai.com/v1/chat/completions'
-model = 'gpt-3.5-turbo'  # gpt-3.5-turbo-0301
+task_params = {
+    'ChatGPT': {
+        'model': 'gpt-3.5-turbo',
+        'url': 'https://api.openai.com/v1/chat/completions'
+    },
+    'GPT4': {
+        'model': 'gpt-4',
+        'url': 'https://yeqiu-gpt4-3.xyhelper.cn/v1/chat/completions'
+    }
+}
 temperature = 0.7
 roles2keep = ['system', 'user', 'assistant']
 keys_keep = ['role', 'content']
@@ -60,7 +68,7 @@ def history2chat(history:list[dict]) -> list[list]:
     return chatbot
 
 # receiving streaming server-sent events（异步）
-def chat_stream(conversations:list, username:str, guest=True):
+def chat_stream(conversations:list, username:str, task:str, guest=True):
     max_length = 500 if guest else 2000
     chat_history = [{k: c[k] for k in keys_keep}
                     for c in conversations if c['role'] in roles2keep]
@@ -70,15 +78,20 @@ def chat_stream(conversations:list, username:str, guest=True):
     print(f'sending conversations rounds: {len(chat_history)}, length:{chat_len(chat_history)}')
     # create a queue to store the responses
     queue = deque()
+    
+    params = task_params[task]
+    url = params['url']
+    model = params['model']
     data = {
-        'model': model,
         'messages': chat_history,
         'stream': True,
         # 'temperature': temperature,
+        'url': url,
+        'model': model,
     }
     header = {
         'Content-Type': 'application/json',
-        'Authorization': f'Bearer {utils.get_openai_key(username)}'
+        'Authorization': f'Bearer {utils.get_openai_key(username, task)}'
     }
     # p = mp.Process(target=get_response, args=(q, header, data))
     thread = threading.Thread(target=get_response, args=(header, data, queue))
@@ -112,6 +125,7 @@ def chat_stream(conversations:list, username:str, guest=True):
 
 
 def get_response(header, data, queue):
+    url = data.pop('url')
     response = requests.post(url, headers=header, json=data, stream=True, timeout=60)
     if response.ok:
         for line in response.iter_lines():
