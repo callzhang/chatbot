@@ -6,40 +6,7 @@ from pathlib import Path
 from retry import retry
 from functools import wraps
 from collections import defaultdict
-from enum import Enum, unique
-
-WIDE_LAYOUT_THRESHOLD = 1000
-SUGGESTION_TOKEN = '[SUGGESTION]'
-FINISH_TOKEN = 'data: [DONE]'
-RETRY_TOKEN = '[RETRY]'
-TIMEOUT = 30
-LOGIN_CODE = 'login_code'
-
-
-@unique
-class Task(Enum):
-    ChatGPT = '对话'
-    GPT4 = 'GPT4'
-    GPT4V = 'GPT4V'
-    BingAI = 'BingAI'
-    text2img = '文字做图'
-    ASR = '语音识别'
-    @classmethod
-    def names(cls):
-        return [c.name for c in cls]
-    @classmethod
-    def values(cls):
-        return [c.value for c in cls]
-    
-@unique
-class Role(Enum):
-    server = '服务器'
-    user = '用户'
-    assistant = '星尘小助手'
-    system = '系统'
-    audio = '语音'
-    DALL·E = 'DALL·E'
-    
+from . import model
 
 
 ## cache management
@@ -68,29 +35,6 @@ def cached(timeout=3600):
 
 
 ## Markdown
-# 导出对话内容到 markdown
-def conversation2markdown(conversation, title=""):
-    history = pd.DataFrame(conversation).query('role not in ["system", "audio"]')
-    # export markdown
-    md_formated = f"""# 关于“{title}”的对话记录
-*导出日期：{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}*\n
-"""
-    for i, c in history.iterrows():
-        role, content, task, name, time = c['role'], c['content'], c.get('task'), c.get('name'), c.get('time')
-        if role == "user":
-            md_formated += '---\n'
-            md_formated += f"""**[{time}]{name}({task}): {content}**\n\n"""
-        elif role in ["assistant"]:
-            md_formated += f"""星尘小助手({name}): {content}\n\n"""
-        elif role == "DALL·E":
-            md_formated += f"""星尘小助手({name}): {content}\n\n"""
-        elif role == '':
-            pass
-        else:
-            raise Exception(f'Unhandled chat: {c}')
-    return md_formated.encode('utf-8').decode()
-
-
 # utls to markdown
 def url2markdown(urls):
     md_formated = ""
@@ -108,47 +52,6 @@ def url2html(urls):
     return html_tags
 
 
-## 处理提示
-def parse_suggestions(content:str):
-    reply = content
-    suggestions = []
-    if SUGGESTION_TOKEN in content:
-        pattern1 = r'(\[SUGGESTION\]:\s?)(\[.+\])'
-        pattern2 = r'(\[SUGGESTION\]:\s?)(.{3,})'
-        pattern3 = r'\[SUGGESTION\]|启发性问题:\s*'
-        pattern31 = r'(-\s|\d\.\s)(.+)'
-        matches1 = re.findall(pattern1, reply)
-        matches2 = re.findall(pattern2, reply)
-        matches3 = re.findall(pattern3, reply)
-        
-        if matches1:
-            for m in matches1:
-                reply = reply.replace(''.join(m), '')
-                try:
-                    suggestions += ast.literal_eval(m[1])
-                except:
-                    print('==>Error parsing suggestion:<===\n', content)
-        elif len(matches2)>=3:
-            for m in matches2:
-                reply = reply.replace(''.join(m), '')
-                suggestions.append(m[1].strip())
-        elif matches3:
-            # assume only one match
-            replies = content.split(matches3[0])
-            reply = replies[0]
-            for r in replies[1:]:
-                match31 = re.findall(pattern31, r)
-                suggestions += [m[1].strip() for m in match31]
-                for m in match31:
-                    r = r.replace(''.join(m), '')
-                reply += r
-
-    return reply, suggestions
-
-def filter_suggestion(content:str):
-    pattern = r'\[?SUGGESTION\].*$'
-    content = '\n'.join(re.split(pattern, content, re.MULTILINE))
-    return content
 
 ## 管理秘钥
 import json, toml

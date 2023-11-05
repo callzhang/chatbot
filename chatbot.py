@@ -1,6 +1,6 @@
 import streamlit as st, pandas as pd
 # from streamlit_chat import message
-from tools import imagegen, asr, openai, utils, bing, chat
+from tools import dialog, utils, controller, model
 import time, logging
 from datetime import datetime, timedelta
 # from streamlit_extras.colored_header import colored_header
@@ -8,10 +8,10 @@ from streamlit_extras.buy_me_a_coffee import button
 import extra_streamlit_components as stx
 
 # 初始化
-Task = utils.Task
-Role = utils.Role
-if 'layout' not in st.session_state:
-    st.session_state.layout = 'centered'
+Task = model.Task
+Role = model.Role
+Message = model.AppMessage
+WIDE_LAYOUT_THRESHOLD = 1000
 st.set_page_config(page_title="💬星尘小助手", page_icon="💬",
                    layout='centered', 
                    initial_sidebar_state="auto", menu_items={
@@ -25,7 +25,7 @@ st.title("💬星尘小助手")
 if 'name' not in st.session_state:
     st.session_state.guest = True
     cm = stx.CookieManager()
-    code = cm.get(utils.LOGIN_CODE)
+    code = cm.get(model.LOGIN_CODE)
     if not code:
         st.info('我是一个集成多个聊天机器人能力的小助手，希望能帮助你提高工作效率😊')
         code = st.text_input('请输入你的访问码', help='仅限员工使用，请勿外传！')
@@ -43,181 +43,34 @@ if 'name' not in st.session_state:
                     exp_date = datetime(expiration.year, expiration.month, expiration.day, 23, 59, 59)
         else:
             st.session_state.name = code
-        cm.set(utils.LOGIN_CODE, code, expires_at=exp_date)
+        cm.set(model.LOGIN_CODE, code, expires_at=exp_date)
         st.rerun()
     st.stop()
     
 ## dialog history management
-# history: 所有对话标题的索引，[time, title, file]
-# conversation: 对话的具体内容列表，[{role, name, time, content, suggestion},...]
-if "conversation" not in st.session_state:
-    # 初始化当前对话
-    chat_history = chat.get_dialog_history(st.session_state.name)
-    # 初始化对话列表
-    st.session_state.chat_titles = chat_history['title'].tolist()
-    # 没有历史记录或创建新对话，增加“新对话”至title
-    if not st.session_state.chat_titles:
-        chat.new_dialog(st.session_state.name)
-        st.rerun()
-    elif 'new_chat' in st.session_state:
-        selected_title = st.session_state.new_chat
-        del st.session_state.new_chat
-    elif 'chat_title_selection' in st.session_state:
-        selected_title = st.session_state.chat_title_selection
-        if selected_title not in st.session_state.chat_titles:
-            selected_title = st.session_state.chat_titles[0]
-    else:
-        selected_title = st.session_state.chat_titles[0]
-        
-    # 初始化对话记录
-    conversation = chat.get_conversation(st.session_state.name, selected_title)
-    # update system prompt
-    st.session_state.conversation = chat.system_prompt.copy()
-    if st.session_state.guest:
-        st.session_state.conversation += chat.guest_prompt(st.session_state.name)
-    else:
-        st.session_state.conversation += chat.staff_prompt(st.session_state.name)
-    st.session_state.conversation += conversation
-    
+dialog.init_dialog(st.session_state.name)
 
 ##---- UI -----
 task = st.selectbox('选择功能', Task.values(), key='task', label_visibility='collapsed')
 # 聊天历史列表
 def on_conversation_change():
     del st.session_state.conversation
-selected_title = st.sidebar.radio('聊天历史', 
-                                  st.session_state.chat_titles, 0, 
+    
+st.session_state.selected_title = st.sidebar.radio('聊天历史', 
+                                  st.session_state.dialog_history, 0, 
                                   key='chat_title_selection', 
                                   on_change=on_conversation_change)
 
 if st.session_state.guest:
     st.info('访客模式：支持最大10轮对话和20轮聊天历史')
-    
-# 对文本输入进行应答
-def gen_response(query=None):
-    # remove suggestion
-    if 'suggestions' in st.session_state.conversation[-1]:
-        st.session_state.conversation[-1].pop('suggestions')
-    if 'action' in st.session_state.conversation[-1]:
-        st.session_state.conversation[-1].pop('action')
-        
-    # get task and input
-    task = st.session_state.task
-    if task == Task.ASR.value:
-        audio_file = st.session_state.get('audio')
-        if audio_file:
-            user_input = audio_file.name
-    elif task in Task.values():
-        user_input = query or st.session_state.input_text
-        if user_input == '':
-            return
-    else:
-        raise NotImplementedError(task)
-    
-    # gen user query
-    print(f'{st.session_state.name}({task}): {user_input}')
-    query_dict = {
-        "role": "user",
-        "name": st.session_state.name, 
-        "content": user_input, 
-        "task": task, 
-        "time": datetime.now()
-    }
-    # display and update db
-    st.session_state.conversation.append(query_dict)
-    chat.update_conversation(st.session_state.name, selected_title, query_dict)
-    
-    # response
-    if task in [Task.ChatGPT.value, Task.GPT4.value, Task.GPT4V.value]:
-        queue = openai.chat_stream(conversations=st.session_state.conversation, 
-                                   username=st.session_state.name, 
-                                   task=task, 
-                                   guest=st.session_state.guest)
-        bot_response = {'role': 'assistant', 
-                        'content': '', 
-                        'queue': queue,
-                        'time': datetime.now(),
-                        'task': task,
-                        'name': task
-                        }
-        # chat = None
-        st.session_state.conversation.append(bot_response)
-    elif task == Task.BingAI.value:
-        if 'bing' not in st.session_state:
-            logging.warning('Initiating BingAI, please wait...')
-            # show loading
-            st.spinner('正在初始化BingAI')
-            st.session_state.bing = bing.BingAI(name=st.session_state.name)
-        
-        queue, thread = st.session_state.bing.chat_stream(user_input)
-        bot_response = {'role': 'assistant', 
-                        'content': '', 
-                        'queue': queue, 
-                        'thread': thread,
-                        'time': datetime.now(),
-                        'name': task
-                        }
-        # chat = None
-        st.session_state.conversation.append(bot_response)
-    elif task == Task.text2img.value:
-        with st.spinner('正在绘制'):
-            urls_md = imagegen.gen_image(user_input)
-            bot_response = {
-                'role': 'assistant',
-                'content': urls_md ,
-                'task': task,
-                'name': 'DALL·E',
-                'time': datetime.now()
-            }
-            st.session_state.conversation.append(bot_response)
-            chat.update_conversation(st.session_state.name, selected_title, bot_response)
-            print(f'DALL·E: {urls_md}')
-            print('-'*50)
-    elif task == '语音识别':
-        with st.spinner('正在识别'):
-            st.session_state.conversation.append({
-                'role': 'audio',
-                'content': audio_file
-            })
-            transcription = asr.transcript(audio_file)
-            bot_response = {
-                'role': 'assistant',
-                'content': chat,
-                'task': task,
-                'name': 'Whisper',
-                'time': datetime.now()
-            }
-            st.session_state.conversation.append(bot_response)
-            chat.update_conversation(st.session_state.name, selected_title, chat)
-            print(f'Whisper: {transcription}')
-            print('-'*50)
-    else:
-        raise NotImplementedError(task)
-
-
-def handle_action(action_token):
-    if action_token == utils.RETRY_TOKEN:
-        bot_response = st.session_state.conversation.pop(-1)
-        user_prompt = st.session_state.conversation.pop(-1)
-        if bot_response['role'] == 'assistant' \
-            and user_prompt['role'] == 'user':
-            user_input = user_prompt['content']
-            gen_response(query=user_input)
-    else:
-        raise NotImplementedError(action_token)
 
 
 # 显示对话内容
-def finish_reply(c, save_log=True):
-    if c.get('thread'):
-        c['thread'].join()
-        c.pop('thread')
-    c.pop('queue')
-    chat.update_conversation(st.session_state.name, selected_title, c)
     
 md_formated = ""
-for i, c in enumerate(st.session_state.conversation):
-    role, content = c['role'], c['content']
+for i, message in enumerate(st.session_state.conversation):
+    role, content = message.role, message.content
+    medias = message.medias
     if role == 'system':
         pass
     elif role == 'server':# not implemented
@@ -227,25 +80,25 @@ for i, c in enumerate(st.session_state.conversation):
         with st.chat_message('user'):
             st.markdown(content)
     elif role == "assistant":
-        queue = c.get('queue')
+        queue = message.queue
         if queue is not None:
             # 获取数据
             while len(queue):
                 content = queue.popleft()
-                if content == utils.FINISH_TOKEN:
-                    finish_reply(c)
+                if content == model.FINISH_TOKEN:
+                    controller.finish_reply(message)
                     st.rerun()
                 else:
-                    c['content'] += content
-                    c['time'] = datetime.now()
+                    message.content += content
+                    message.time = datetime.now()
             # 超时
-            if (datetime.now() - c['time']).total_seconds() > utils.TIMEOUT:
-                c['content'] += '\n\n抱歉出了点问题，请重试...'
-                c['actions'] = {'重试': utils.RETRY_TOKEN}
-                finish_reply(c, save_log=False)
+            if (datetime.now() - message.time).total_seconds() > model.TIMEOUT:
+                message.content += '\n\n抱歉出了点问题，请重试...'
+                message.actions = {'重试': model.RETRY_TOKEN}
+                controller.finish_reply(message)
                 
             # 渲染
-            content = c['content'].replace(utils.SUGGESTION_TOKEN, '')
+            content = message.content.replace(model.SUGGESTION_TOKEN, '')
             # message(content, key=str(i), avatar_style='jdenticon')
             with st.chat_message('assistant'):
                 st.markdown(content + "▌")
@@ -253,13 +106,13 @@ for i, c in enumerate(st.session_state.conversation):
             st.rerun()
         else:
             # 结束
-            content = c['content']
-            suggestions = c.get('suggestions', [])
+            content = message.content
+            suggestions = message.suggestions
             # suggestion
             if not suggestions:
-                content, suggestions = utils.parse_suggestions(content)
-                c['content'] = content
-                c['suggestions'] = suggestions
+                content, suggestions = controller.parse_suggestions(content)
+                message.content = content
+                message.suggestions = suggestions
             # message(content, key=str(i), avatar_style='jdenticon')
             with st.chat_message('assistant'):
                 st.markdown(content)
@@ -268,21 +121,20 @@ for i, c in enumerate(st.session_state.conversation):
                 cols = st.columns(len(suggestions))
                 for col, suggestion in zip(cols, suggestions):
                     with col:
-                        # if suggestion:
-                            st.button('👉🏻'+suggestion[:50], help=suggestion,
-                                      on_click=gen_response, kwargs={'query': suggestion})
+                        st.button('👉🏻'+suggestion[:50], help=suggestion,
+                                    on_click=controller.gen_response, kwargs={'query': suggestion})
             
             # actions: only "retry" is supported
-            actions= c.get('actions')
+            actions= message.actions
             if actions and i == len(st.session_state.conversation) -1:
                 if type(actions) is str:
                     actions = eval(actions)
                 for action, token in actions.items():
-                    st.button(action, on_click=handle_action, args=(token,))
+                    st.button(action, on_click=controller.handle_action, args=(token,))
     elif role == 'DALL·E':
         # message(c['content'], key=str(i), avatar_style='jdenticon')
         with st.chat_message('DALL·E'):
-            st.markdown(c['content'])
+            st.markdown(message.content)
     elif role == 'audio':
         c1, c2 = st.columns([0.6,0.4])
         with c2:
@@ -290,12 +142,12 @@ for i, c in enumerate(st.session_state.conversation):
     else:
         #raise Exception(c)
         with st.chat_message('error'):
-            st.markdown(str(c))
+            st.markdown(str(message))
 
     # page layout
-    if st.session_state.layout != 'wide' and c['role']=='assistant' and len(c['content']) > utils.WIDE_LAYOUT_THRESHOLD:
-        st.session_state.layout = 'wide'
-        st.rerun()
+    # if st.session_state.layout != 'wide' and message.role=='assistant' and len(message.content) > WIDE_LAYOUT_THRESHOLD:
+    #     st.session_state.layout = 'wide'
+    #     st.rerun()
 
 # 添加文本输入框
 # c1, c2 = st.columns([0.18,0.82])
@@ -309,7 +161,7 @@ elif task == Task.ChatGPT.value:
 elif task == Task.GPT4.value:
     disabled, help = False, '输入你的问题，然后按回车提交。'
 elif task == Task.GPT4V.value:
-    disabled, help = True, '(暂未开放）输入你的问题，并上传图片，然后按回车提交。'
+    disabled, help = False, '输入你的问题，并上传图片，然后按回车提交。'
 elif task == Task.BingAI.value:
     if utils.get_bingai_key(st.session_state.name) is None:
         disabled, help = True, '请先在设置中填写BingAI的秘钥'
@@ -325,17 +177,18 @@ else:
     raise NotImplementedError(task)
 
 # 输入框
-if task == Task.ASR.value:
-    audio_file = st.file_uploader('上传语音文件', type=asr.accepted_types, key='audio', on_change=gen_response, disabled=disabled)
-elif task in Task.values():
+if task in Task.ASR.value:
+    attachment = st.file_uploader('上传语音文件', type=controller.asr_media_types, key='attachment', on_change=controller.gen_response, disabled=disabled)
+elif task == Task.GPT4V.value:
+    attachment = st.file_uploader('上传图片', type=controller.gpt_media_types, key='attachment', disabled=disabled)
+
+if task in Task.values():
     prompt = st.chat_input(placeholder=help,
                     key='input_text', 
                     disabled=disabled,
                     # max_chars=1000,
-                    on_submit=gen_response
+                    on_submit = controller.gen_response
                 )
-    if task == Task.GPT4V.value:
-        image_file = st.file_uploader('上传图片', type=['png', 'jpg', 'jpeg'], key='image', disabled=disabled)
 else:
     raise NotImplementedError(task)
 
@@ -343,13 +196,13 @@ else:
 c1, c2, c3, c4 = st.sidebar.columns(4)
 
 with c1: # 新对话
-    if st.session_state.guest and len(st.session_state.chat_titles) >= 20:
+    if st.session_state.guest and len(st.session_state.dialog_history) >= 20:
         disabled, help = True, '访客不支持超过10轮对话，请联系管理员'
     else:
         disabled, help = False, '新对话'
     if st.button('➕', key='clear', help=help, disabled=disabled):
         del st.session_state.conversation
-        title = chat.new_dialog(st.session_state.name)
+        title = dialog.new_dialog(st.session_state.name)
         st.session_state.new_chat = title
         st.session_state.audio = None
         st.session_state.layout = 'centered'
@@ -357,11 +210,11 @@ with c1: # 新对话
 with c2: # 删除
     if st.button('⛔', help='删除当前聊天记录', disabled=st.session_state.guest):
         del st.session_state.conversation
-        chat.delete_dialog(st.session_state.name, selected_title)
+        dialog.delete_dialog(st.session_state.name, st.session_state.selected_title)
         st.rerun()
 with c3: # 导出
     if st.download_button(label='📤', help='导出对话',
-                        data=utils.conversation2markdown(st.session_state.conversation, st.session_state.name), 
+                        data=dialog.conversation2markdown(st.session_state.conversation, st.session_state.name), 
                         file_name=f'history.md',
                         mime='text/markdown'):
         st.success('导出成功！')
@@ -370,9 +223,9 @@ with c4: # 修改
     def update_title():
         del st.session_state.conversation
         new_title = st.session_state.new_title_text
-        chat.edit_dialog_name(st.session_state.name, selected_title, new_title)
+        dialog.edit_dialog_name(st.session_state.name, st.session_state.selected_title, new_title)
     if st.button('✏️', help='修改对话名称'):
-        new_title = st.sidebar.text_input('修改名称', selected_title, help='修改当前对话标题', key='new_title_text', on_change=update_title)
+        new_title = st.sidebar.text_input('修改名称', st.session_state.selected_title, help='修改当前对话标题', key='new_title_text', on_change=update_title)
         
         
 from streamlit_extras.add_vertical_space import add_vertical_space

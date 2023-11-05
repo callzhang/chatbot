@@ -37,7 +37,10 @@ def gen_image(prompt):
     if 'error' in res:
         return res['error']['message']
     urls = [r['url'] for r in res['data']]
-    return url2markdown(urls)
+    # return markdown
+    # return url2markdown(urls)
+    return urls
+    
 
 
 

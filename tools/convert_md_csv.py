@@ -1,7 +1,7 @@
 import os, pandas as pd, sys, re, shutil
 from datetime import datetime
 from pathlib import Path
-from . import utils
+from . import utils, controller
 from collections import defaultdict
 
 def convert_md_csv():
@@ -84,7 +84,7 @@ def get_history(name, to_dict=False):
                     'content': query
                 })
             for bot, reply in replies:
-                content, suggestions = utils.parse_suggestions(reply)
+                content, suggestions = controller.parse_suggestions(reply)
                 chat_history[date_str].append({
                     'role': 'assistant',
                     'time': t,

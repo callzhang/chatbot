@@ -1,7 +1,7 @@
 import gradio as gr
 import random
 import time
-from tools import openai, utils, chat
+from tools import dialog, openai, utils, model, controller
 
 name = 'Derek'
 
@@ -17,7 +17,7 @@ themes = [
     
 with gr.Blocks(theme=random.choice(themes),
                title='星尘小助手') as demo:
-    history = gr.State(chat.system_prompt)
+    history = gr.State(dialog.system_prompt)
 
     def bot(msg, history, task):
         if not msg or msg.strip() == '':
@@ -41,7 +41,7 @@ with gr.Blocks(theme=random.choice(themes),
         while receiving:
             while queue is not None and len(queue):
                 content = queue.popleft()
-                if content == utils.FINISH_TOKEN:
+                if content == models.FINISH_TOKEN:
                     receiving = False
                 else:
                     history[-1]['content'] += content
@@ -51,9 +51,9 @@ with gr.Blocks(theme=random.choice(themes),
             chatbot[-1][1] = utils.filter_suggestion(history[-1]['content'])
             yield '', history, chatbot
             # timeout
-            if time.time() - start > utils.TIMEOUT:
+            if time.time() - start > model.TIMEOUT:
                 chatbot[-1][1] += '\n抱歉出了点问题，请重试...'
-                actions.update({'重试': utils.RETRY_TOKEN})
+                actions.update({'重试': model.RETRY_TOKEN})
                 history[-1]['actions'] = actions
                 receiving = False
                 yield '', history, chatbot
@@ -63,8 +63,8 @@ with gr.Blocks(theme=random.choice(themes),
         # suggestion
         content = history[-1].get('content')
         suggestions = []
-        if utils.SUGGESTION_TOKEN in content:
-            content, suggestions = utils.parse_suggestions(content)
+        if model.SUGGESTION_TOKEN in content:
+            content, suggestions = controller.parse_suggestions(content)
             history[-1]['suggestions'] = suggestions
             history[-1]['content'] = content
             print(f'suggestion: \n{suggestions}')
@@ -74,7 +74,7 @@ with gr.Blocks(theme=random.choice(themes),
         actions = history[-1].get('actions')
         if actions:
             for title, action in actions.items():
-                if action == utils.RETRY_TOKEN:
+                if action == model.RETRY_TOKEN:
                     action_btns.append(gr.Button.update(value=title, visible=True))
             
         action_btns += [gr.Button.update(visible=False) for i in range(10-len(suggestions))]

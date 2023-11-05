@@ -1,7 +1,7 @@
 import streamlit as st
 import json, os, time
 import extra_streamlit_components as stx
-from tools import utils
+from tools import utils, model
 
 st.title('秘钥输入')
 st.write('请在下方输入秘钥，我们不会泄露你的秘钥，但是请注意不要泄露给他人')
@@ -98,6 +98,6 @@ with bing_tab:
 # log out
 cm = stx.CookieManager()
 if st.button('退出登录'):
-    cm.delete(utils.LOGIN_CODE)
+    cm.delete(model.LOGIN_CODE)
     del st.session_state.name
     del st.session_state.conversation

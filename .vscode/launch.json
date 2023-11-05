@@ -17,13 +17,14 @@
             "type": "python",
             "request": "launch",
             "module": "streamlit",
-            "justMyCode": false,
+            "justMyCode": true,
             "args": [
                 "run",
                 "chatbot.py",
                 "--server.port",
                 "9044"
             ],
+            "env": {"DEBUG": "true"}
         }
     ]
 }

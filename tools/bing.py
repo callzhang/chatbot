@@ -3,9 +3,9 @@ from EdgeGPT.EdgeGPT import Chatbot, ConversationStyle
 from collections import deque
 import threading, json
 try:
-    from . import openai
+    from . import openai, model
 except:
-    import chat
+    import tools.dialog as dialog
     
 from . import utils
 
@@ -43,7 +43,7 @@ class BingAI:
             if tried > 2:
                 # 如果仍然不行，则认为账户失效
                 queue.append('BingAI账户失效，请检查！')
-                queue.append(utils.FINISH_TOKEN)
+                queue.append(model.FINISH_TOKEN)
                 return
         message = ''
         async for finished, response in self.bot.ask_stream(prompt):
@@ -56,13 +56,13 @@ class BingAI:
                 print('')
                 try:
                     suggestions = [r['text'] for r in response['item']['messages'][1]['suggestedResponses']]
-                    print(f'{utils.SUGGESTION_TOKEN}:  {suggestions}')
-                    queue.append(f'{utils.SUGGESTION_TOKEN}: {json.dumps(suggestions)}')
+                    print(f'{model.SUGGESTION_TOKEN}:  {suggestions}')
+                    queue.append(f'{model.SUGGESTION_TOKEN}: {json.dumps(suggestions)}')
                 except:
                     if response['item']['result']['value'] == 'InvalidSession':
                         logging.error(response['item']['result']['message'])
                         self.renew()
-                queue.append(utils.FINISH_TOKEN)
+                queue.append(model.FINISH_TOKEN)
                 print('-'*60)
                 break
         self.close()

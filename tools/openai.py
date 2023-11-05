@@ -2,7 +2,7 @@ from retry import retry
 import requests, json, re, logging
 import threading
 from collections import deque
-from . import utils, chat
+from . import dialog, utils, model
 try:
     from transformers import AutoTokenizer
     tokenizer = AutoTokenizer.from_pretrained("gpt2")
@@ -11,23 +11,23 @@ except:
 
 # 参数
 task_params = {
-    utils.Task.ChatGPT.value: {
+    model.Task.ChatGPT.value: {
         'model': 'gpt-3.5-turbo',
         'url': 'https://api.openai.com/v1/chat/completions'
     },
-    utils.Task.GPT4.value: {
+    model.Task.GPT4.value: {
         'model': 'gpt-4',
         'url': 'https://yeqiu-gpt4-3.xyhelper.cn/v1/chat/completions'
     },
-    utils.Task.GPT4V.value: {
+    model.Task.GPT4V.value: {
         'model': 'gpt-4v',
         'url': 'http://121.127.44.50:8100/v1/chat/gpt4v'
     }
 }
 temperature = 0.7
 roles2keep = ['system', 'user', 'assistant']
-keys_keep = ['role', 'content']
-
+key2keep = ['role', 'content']
+accepted_attachment_types = ['png', 'jpg', 'jpeg']
 
 def chat_len(conversations):
     chat_string = ' '.join(c['content'] for c in conversations)
@@ -56,15 +56,13 @@ def history2chat(history:list[dict]) -> list[list]:
 # receiving streaming server-sent events（异步）
 def chat_stream(conversations:list, username:str, task:str, attachment=None, guest=True):
     max_length = 500 if guest else 2000
-    if not isinstance(conversations, str):
-        chat_history = [{k: c[k] for k in keys_keep}
-                        for c in conversations if c['role'] in roles2keep]
-        while chat_len(chat_history) > max_length and len(chat_history) > 1:
-            chat_history.pop(0)
-        chat_history.append(chat.suggestion_prompt)
-        print(f'sending conversations rounds: {len(chat_history)}, length:{chat_len(chat_history)}')
-    else:
-        chat_history = conversations
+    chat_history = [{k: c.dict()[k] for k in key2keep}
+                    for c in conversations if c.role in roles2keep]
+    while chat_len(chat_history) > max_length and len(chat_history) > 1:
+        chat_history.pop(0)
+    chat_history.append(dialog.suggestion_prompt)
+    print(f'sending conversations rounds: {len(chat_history)}, length:{chat_len(chat_history)}')
+
     # create a queue to store the responses
     queue = deque()
     
@@ -103,8 +101,8 @@ def get_response(header, data, queue):
         for line in response.iter_lines():
             if not line:
                 continue
-            if line == utils.FINISH_TOKEN.encode():
-                queue.append(utils.FINISH_TOKEN)
+            if line == model.FINISH_TOKEN.encode():
+                queue.append(model.FINISH_TOKEN)
                 print('\n'+'-'*60)
                 return
             try:
@@ -123,7 +121,7 @@ def get_response(header, data, queue):
         estring = f'出错啦，请重试: {response.status_code}, {response.text}'
         logging.error(json.dumps(data, indent=2, ensure_ascii=False))
         queue.append(estring)
-        queue.append(utils.FINISH_TOKEN)
+        queue.append(model.FINISH_TOKEN)
         return
 
 
