@@ -12,8 +12,10 @@ Task = model.Task
 Role = model.Role
 Message = model.AppMessage
 WIDE_LAYOUT_THRESHOLD = 1000
+if 'desired_layout' not in st.session_state:
+    st.session_state.desired_layout = 'centered'
 st.set_page_config(page_title="💬星尘小助手", page_icon="💬",
-                   layout='centered', 
+                   layout=st.session_state.desired_layout,
                    initial_sidebar_state="auto", menu_items={
              'Get Help': 'https://stardust.ai',
             #  'Report a bug': "https://www.extremelycoolapp.com/bug",
@@ -69,16 +71,20 @@ if st.session_state.guest:
     
 md_formated = ""
 for i, message in enumerate(st.session_state.conversation):
-    role, content = message.role, message.content
-    medias = message.medias
+    role, content, medias =  message.role, message.content, message.medias
     if role == 'system':
         pass
     elif role == 'server':# not implemented
         with st.chat_message('server'):
             st.markdown(content)
     elif role == "user":
-        with st.chat_message('user'):
-            st.markdown(content)
+        if content or medias:
+            with st.chat_message('user'):
+                if medias:
+                    for media in medias:
+                        controller.display_media(media)
+                if content:
+                    st.markdown(content)
     elif role == "assistant":
         queue = message.queue
         if queue is not None:
@@ -113,9 +119,14 @@ for i, message in enumerate(st.session_state.conversation):
                 content, suggestions = controller.parse_suggestions(content)
                 message.content = content
                 message.suggestions = suggestions
-            # message(content, key=str(i), avatar_style='jdenticon')
-            with st.chat_message('assistant'):
-                st.markdown(content)
+            # media and content
+            if content or medias:
+                with st.chat_message('assistant'):
+                    if medias:
+                        for media in medias:
+                            controller.display_media(media)
+                    if content:
+                        st.markdown(content)
             # seggestions
             if suggestions and i == len(st.session_state.conversation) -1:
                 cols = st.columns(len(suggestions))
@@ -131,29 +142,25 @@ for i, message in enumerate(st.session_state.conversation):
                     actions = eval(actions)
                 for action, token in actions.items():
                     st.button(action, on_click=controller.handle_action, args=(token,))
-    elif role == 'DALL·E':
-        # message(c['content'], key=str(i), avatar_style='jdenticon')
-        with st.chat_message('DALL·E'):
-            st.markdown(message.content)
-    elif role == 'audio':
-        c1, c2 = st.columns([0.6,0.4])
-        with c2:
-            st.audio(content)
+    # elif role == 'DALL·E':
+    #     # message(c['content'], key=str(i), avatar_style='jdenticon')
+    #     with st.chat_message('DALL·E'):
+    #         st.markdown(message.content)
+    # elif role == 'audio':
+    #     c1, c2 = st.columns([0.6,0.4])
+    #     with c2:
+    #         st.audio(content)
     else:
         #raise Exception(c)
         with st.chat_message('error'):
             st.markdown(str(message))
 
     # page layout
-    # if st.session_state.layout != 'wide' and message.role=='assistant' and len(message.content) > WIDE_LAYOUT_THRESHOLD:
-    #     st.session_state.layout = 'wide'
-    #     st.rerun()
+    if st.session_state.desired_layout != 'wide' and message.role=='assistant' and len(message.content) > WIDE_LAYOUT_THRESHOLD:
+        st.session_state.desired_layout = 'wide'
+        st.rerun()
 
 # 添加文本输入框
-# c1, c2 = st.columns([0.18,0.82])
-# with c1:
-# task = st.selectbox('选择功能', ['ChatGPT', 'GPT4', 'BingAI', '文字做图', '语音识别'], key='task', label_visibility='collapsed')
-# with c2:
 if st.session_state.guest and len(st.session_state.conversation) > 10:
     disabled, help = True, '访客不支持长对话，请联系管理员'
 elif task == Task.ChatGPT.value:

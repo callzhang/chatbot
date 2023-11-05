@@ -195,8 +195,9 @@ def allocate_file_path(filename):
 from streamlit.runtime.uploaded_file_manager import UploadedFile
 def save_files_to_uri_list(file: UploadedFile):
     filepath = allocate_file_path(file.name)
-    file.save(filepath)
-    return filepath
+    with open(filepath, 'wb') as f:
+        f.write(file.getvalue())
+    return str(filepath)
 
 
 # export

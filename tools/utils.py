@@ -59,8 +59,10 @@ import json, toml
 def default_openai_key(task):
     with open('.streamlit/secrets.toml', 'r') as f:
         data = toml.load(f)
-    if task == 'GPT4':
+    if task == model.Task.GPT4.name:
         key = data.get('gpt4-key')
+    elif task == model.Task.GPT4V.name:
+        key = data.get('gpt4v-key')
     else:
         key = data.get(f'openai-key')
     return key
@@ -108,6 +110,16 @@ def get_db():
     time.sleep(1)
     return df
 
+# file utils
+from urllib.parse import urlparse
+import mimetypes
+def parse_file_info(path_or_str):
+    if isinstance(path_or_str, str):
+        path_or_str = urlparse(path_or_str).path
+    filename = os.path.basename(path_or_str)
+    mime_type, encoding = mimetypes.guess_type(filename)
+    # filetype = os.path.splitext(filename)[-1].replace('.','')
+    return filename, mime_type
 
 if __name__ == '__main__':
     db = get_db()

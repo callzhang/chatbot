@@ -30,7 +30,7 @@ key2keep = ['role', 'content']
 accepted_attachment_types = ['png', 'jpg', 'jpeg']
 
 def chat_len(conversations):
-    chat_string = ' '.join(c['content'] for c in conversations)
+    chat_string = ' '.join(c['content'] for c in conversations if c['content'])
     # count tokens
     try:
         count = len(tokenizer.encode(chat_string))
@@ -57,7 +57,7 @@ def history2chat(history:list[dict]) -> list[list]:
 def chat_stream(conversations:list, username:str, task:str, attachment=None, guest=True):
     max_length = 500 if guest else 2000
     chat_history = [{k: c.dict()[k] for k in key2keep}
-                    for c in conversations if c.role in roles2keep]
+                    for c in conversations if c.role in roles2keep and c.content]
     while chat_len(chat_history) > max_length and len(chat_history) > 1:
         chat_history.pop(0)
     chat_history.append(dialog.suggestion_prompt)
@@ -78,7 +78,6 @@ def chat_stream(conversations:list, username:str, task:str, attachment=None, gue
         'file': attachment
     }
     header = {
-        'Content-Type': 'application/json',
         'Authorization': f'Bearer {utils.get_openai_key(username, task)}'
     }
     # p = mp.Process(target=get_response, args=(q, header, data))
@@ -92,11 +91,19 @@ def get_response(header, data, queue):
     url = data.pop('url')
     file = data.pop('file')
     if not file:
+        # header['Content-Type'] = 'application/json'
         response = requests.post(url, headers=header, json=data, stream=True, timeout=60)
     else: # gpt4v
         data2 = {'stream': True}
-        data2['message'] = data['messages']
-        response = requests.post(url, headers=header, data=data2, files=file, stream=True, timeout=60)
+        message = ''
+        for k in range(len(data['messages'])-1, 0, -1):
+            if data['messages'][k]['role'] == model.Role.user.name:
+                message = data['messages'][k]['content']
+                break
+        data2['message'] = message
+        fobject = {'file': (file.name, file)}
+        # header['Content-Type'] = 'multipart/form-data' # The issue is that the Content-Type header in your request is missing the boundary parameter, which is crucial for the server to parse the multipart form data correctly. The requests library in Python should add this parameter automatically when you pass data through the files parameter. It seems like the Content-Type header is being set manually somewhere which is overriding the automatically set header by requests. Make sure that you are not setting the Content-Type header manually anywhere in your code or in any middleware that might be modifying the request.
+        response = requests.post(url, headers=header, data=data2, files=fobject, stream=data2['stream'], timeout=300)
     if response.ok:
         for line in response.iter_lines():
             if not line:

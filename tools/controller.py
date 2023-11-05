@@ -15,6 +15,8 @@ asr_media_types = asr.accepted_types
 
 # 对输入进行应答
 def gen_response(query=None):
+    task = st.session_state.task
+    assert task in Task.values(), NotImplementedError(task)
     # remove suggestion
     if 'suggestions' in st.session_state.conversation[-1]:
         st.session_state.conversation[-1].pop('suggestions')
@@ -22,18 +24,15 @@ def gen_response(query=None):
         st.session_state.conversation[-1].pop('action')
         
     # get task and input
-    task = st.session_state.task
-    if task in Task.values():
-        user_input = query or st.session_state.input_text
-        user_input = user_input.strip() or st.session_state.get('attachment').name
-        if not user_input:
-            return
-    else:
-        raise NotImplementedError(task)
-
-    # gen user query
-    print(f'{st.session_state.name}({task}): {user_input}')
+    user_input = query or st.session_state.input_text
     attachment = st.session_state.get('attachment')
+    if not user_input and attachment:
+        user_input = attachment.name
+    if not user_input:
+        return
+    
+    # create user query
+    print(f'{st.session_state.name}({task}): {user_input}')
     query_message = Message(
         role = "user",
         name = st.session_state.name, 
@@ -50,7 +49,8 @@ def gen_response(query=None):
     if task in [Task.ChatGPT.value, Task.GPT4.value, Task.GPT4V.value]:
         queue = openai.chat_stream(conversations=st.session_state.conversation, 
                                     username=st.session_state.name, 
-                                    task=task, 
+                                    task=task,
+                                    attachment=attachment,
                                     guest=st.session_state.guest)
         bot_response = Message(
             role= Role.assistant.name,
@@ -77,6 +77,7 @@ def gen_response(query=None):
         )
         st.session_state.conversation.append(bot_response)
     elif task == Task.text2img.value:
+        toast = st.toast('正在绘制', icon='🖌️')
         with st.spinner('正在绘制'):
             urls = imagegen.gen_image(user_input)
             bot_response = Message(
@@ -87,8 +88,10 @@ def gen_response(query=None):
                 time = datetime.now(),
                 medias = urls
             )
+            toast.toast('绘制完成，正在下载', icon='🤩')
             st.session_state.conversation.append(bot_response)
-            finish_reply(bot_response)
+        toast.toast('下载完成', icon='😄')
+        finish_reply(bot_response)
     elif task == Task.ASR.value:
         with st.spinner('正在识别'):
             assert attachment.type in asr_media_types
@@ -117,7 +120,6 @@ def handle_action(action_token):
         raise NotImplementedError(action_token)
     
     
-
 def finish_reply(message):
     message.queue = None
     if message.thread: # terminate streaming thread
@@ -128,10 +130,27 @@ def finish_reply(message):
     dialog.update_conversation(st.session_state.name, st.session_state.selected_title, message)
     print('-'*50)
     
+
+def display_media(media):
+    media_type = media.type.split('/')[0]
+    if media.type in gpt_media_types or media_type == model.MediaType.image.name:
+        media_type == model.MediaType.image
+        st.image(media, use_column_width='always')
+    elif media.type in asr_media_types or media_type == model.MediaType.audio.name:
+        media_type == model.MediaType.audio
+        st.audio(media)
+    elif media.type == 'mp4' or media_type == model.MediaType.video.name:
+        media_type == model.MediaType.video
+        st.video(media)
+    else:
+        raise NotImplementedError(media.tpye)
+    return media_type
     
     
 ## 处理提示
 def parse_suggestions(content:str):
+    if not content:
+        return None, None
     reply = content
     suggestions = []
     if model.SUGGESTION_TOKEN in content:

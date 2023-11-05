@@ -4,11 +4,12 @@ from collections import deque
 from datetime import datetime
 from streamlit.runtime.uploaded_file_manager import UploadedFile, UploadedFileRec
 from io import BytesIO
-import requests, os, logging
+import requests, os, logging, mimetypes
 from pydantic.dataclasses import dataclass # not useful as it cannot check arbitrary types
 from pydantic import BaseModel, validator
 from threading import Thread
-
+from pathlib import PosixPath
+from . import utils
 
 SUGGESTION_TOKEN = '[SUGGESTION]'
 FINISH_TOKEN = 'data: [DONE]'
@@ -69,7 +70,7 @@ class AppMessage(BaseModel):
         extra = 'forbid'
         
     role: str # system/user/assistant
-    content: str | None # text message displayed in the chat
+    content: str | None # text message displayed in the chat, None when using text2img
     queue: deque | None # used to get streaming message from another thread
     thread: Thread | None # thread used to close when streaming is finished
     time: datetime # time created
@@ -92,11 +93,13 @@ class AppMessage(BaseModel):
         return task or None
            
     @validator('medias', pre=True, always=True)
-    def set_medias(media_bytes_or_urls:list):
-        if not media_bytes_or_urls:
+    def set_medias(media_bytes_or_urls_or_str:list):
+        if not media_bytes_or_urls_or_str:
             return None
         medias = []
-        for m in media_bytes_or_urls:
+        if isinstance(media_bytes_or_urls_or_str, str):
+            media_bytes_or_urls_or_str = eval(media_bytes_or_urls_or_str)
+        for m in media_bytes_or_urls_or_str:
             if isinstance(m, str):
                 # url, download to local file
                 if m.startswith('http'):
@@ -104,13 +107,22 @@ class AppMessage(BaseModel):
                 elif os.path.exists(m):
                     data = open(m, 'rb').read()
                 else:
-                    raise Exception(f'Unknown media url: {m}')
-                filename = m.split('/')[-1]
-                # filepath = chat_model.allocate_file_path(filename)
+                    raise Exception(f'Unknown media url or file not found: {m}')
+                filename, filetype = utils.parse_file_info(m)
                 rec = UploadedFileRec(
-                    file_id=filename,
+                    file_id=m,
                     name=filename,
-                    type=filename.split('.')[-1],
+                    type=filetype,
+                    data=data,
+                )
+                medias.append(UploadedFile(rec, m))
+            elif isinstance(m, PosixPath) and os.path.exists(m):
+                data = open(m, 'rb').read()
+                filename, filetype = utils.parse_file_info(m)
+                rec = UploadedFileRec(
+                    file_id=str(m),
+                    name=filename,
+                    type=filetype,
                     data=data,
                 )
                 medias.append(UploadedFile(rec, m))
