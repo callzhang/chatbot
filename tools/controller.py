@@ -18,10 +18,9 @@ def gen_response(query=None):
     task = st.session_state.task
     assert task in Task.values(), NotImplementedError(task)
     # remove suggestion
-    if 'suggestions' in st.session_state.conversation[-1]:
-        st.session_state.conversation[-1].pop('suggestions')
-    if 'action' in st.session_state.conversation[-1]:
-        st.session_state.conversation[-1].pop('action')
+    if st.session_state.conversation:
+        st.session_state.conversation[-1].suggestions = None
+        st.session_state.conversation[-1].actions = None
         
     # get task and input
     user_input = query or st.session_state.input_text
@@ -94,7 +93,6 @@ def gen_response(query=None):
         finish_reply(bot_response)
     elif task == Task.ASR.value:
         with st.spinner('正在识别'):
-            assert attachment.type in asr_media_types
             transcription = asr.transcript(attachment)
             bot_response = Message(
                 role= Role.assistant.name,
@@ -122,11 +120,11 @@ def handle_action(action_token):
     
 def finish_reply(message):
     message.queue = None
-    if message.thread: # terminate streaming thread
-        message.thread.join()
-        message.thread = None
-    else:
-        logging.info(f'{message.name}: {message.content}')
+    # if message.thread: # terminate streaming thread
+    #     message.thread.join()
+    #     message.thread = None
+    # else:
+    #     logging.info(f'{message.name}: {message.content}')
     dialog.update_conversation(st.session_state.name, st.session_state.selected_title, message)
     print('-'*50)
     

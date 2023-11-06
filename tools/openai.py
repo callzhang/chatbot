@@ -2,6 +2,7 @@ from retry import retry
 import requests, json, re, logging
 import threading
 from collections import deque
+import streamlit as st
 from . import dialog, utils, model
 try:
     from transformers import AutoTokenizer
@@ -55,10 +56,12 @@ def history2chat(history:list[dict]) -> list[list]:
 
 # receiving streaming server-sent events（异步）
 def chat_stream(conversations:list, username:str, task:str, attachment=None, guest=True):
-    max_length = 500 if guest else 2000
+    max_length = 500 if guest else 4000
     chat_history = [{k: c.dict()[k] for k in key2keep}
                     for c in conversations if c.role in roles2keep and c.content]
     while chat_len(chat_history) > max_length and len(chat_history) > 1:
+        if chat_history[0].role in ['assistant', 'user']:
+            st.toast(f'历史数据过长，舍弃: {chat_history[0].conteng[:10]}')
         chat_history.pop(0)
     chat_history.append(dialog.suggestion_prompt)
     print(f'sending conversations rounds: {len(chat_history)}, length:{chat_len(chat_history)}')
@@ -82,7 +85,7 @@ def chat_stream(conversations:list, username:str, task:str, attachment=None, gue
     }
     # p = mp.Process(target=get_response, args=(q, header, data))
     thread = threading.Thread(target=get_response, args=(header, data, queue))
-    thread.daemon = True
+    # thread.daemon = True
     thread.start()
     return queue
     
@@ -127,8 +130,7 @@ def get_response(header, data, queue):
     else:
         estring = f'出错啦，请重试: {response.status_code}, {response.text}'
         logging.error(json.dumps(data, indent=2, ensure_ascii=False))
-        queue.append(estring)
-        queue.append(model.FINISH_TOKEN)
+        queue.append({model.SERVER_ERROR: estring})
         return
 
 

@@ -86,48 +86,56 @@ for i, message in enumerate(st.session_state.conversation):
                 if content:
                     st.markdown(content)
     elif role == "assistant":
-        queue = message.queue
-        if queue is not None:
-            # 获取数据
-            while len(queue):
-                content = queue.popleft()
-                if content == model.FINISH_TOKEN:
-                    controller.finish_reply(message)
-                    st.rerun()
-                else:
-                    message.content += content
-                    message.time = datetime.now()
-            # 超时
-            if (datetime.now() - message.time).total_seconds() > model.TIMEOUT:
-                message.content += '\n\n抱歉出了点问题，请重试...'
-                message.actions = {'重试': model.RETRY_TOKEN}
-                controller.finish_reply(message)
-                
-            # 渲染
-            content = message.content.replace(model.SUGGESTION_TOKEN, '')
-            # message(content, key=str(i), avatar_style='jdenticon')
-            with st.chat_message('assistant'):
-                st.markdown(content + "▌")
-            time.sleep(0.1)
-            st.rerun()
-        else:
-            # 结束
+        with st.chat_message('assistant'):
+            msg_placeholder = st.empty()
+            if message.queue is not None: # streaming
+                streaming = True
+                queue = message.queue
+                while streaming:
+                    while len(queue) > 0:
+                        content = queue.popleft()
+                        if isinstance(content, str):
+                            if content == model.FINISH_TOKEN:
+                                controller.finish_reply(message)
+                                streaming = False
+                                break
+                            message.content += content
+                            message.time = datetime.now()
+                        elif isinstance(content, dict): # network error
+                            if v := content.get(model.SERVER_ERROR):
+                                message.content += f'\n\n{v}'
+                                message.actions = {'重试': model.RETRY_TOKEN}
+                                controller.finish_reply(message)
+                                streaming = False
+                    # 超时
+                    timeout = (datetime.now() - message.time).total_seconds() > model.TIMEOUT
+                    if timeout:
+                        message.content += '\n\n请求超时，请重试...'
+                        message.actions = {'重试': model.RETRY_TOKEN}
+                        controller.finish_reply(message)
+                        break
+                    # 渲染
+                    content_full = message.content.replace(model.SUGGESTION_TOKEN, '')
+                    msg_placeholder.markdown(content_full + "▌")
+                    time.sleep(0.1)
+                    
+            # 显示完整内容
             content = message.content
             suggestions = message.suggestions
-            # suggestion
-            if not suggestions:
-                content, suggestions = controller.parse_suggestions(content)
-                message.content = content
-                message.suggestions = suggestions
             # media and content
             if content or medias:
-                with st.chat_message('assistant'):
-                    if medias:
-                        for media in medias:
-                            controller.display_media(media)
-                    if content:
-                        st.markdown(content)
-            # seggestions
+                if medias:
+                    for media in medias:
+                        controller.display_media(media)
+                if content:
+                    msg_placeholder.markdown(content)
+            # suggestion
+            if content and model.SUGGESTION_TOKEN in content:
+                content, suggestions = controller.parse_suggestions(content)
+                message.suggestions = suggestions
+                # update content
+                message.content = content
+                msg_placeholder.markdown(content)
             if suggestions and i == len(st.session_state.conversation) -1:
                 cols = st.columns(len(suggestions))
                 for col, suggestion in zip(cols, suggestions):
@@ -142,16 +150,8 @@ for i, message in enumerate(st.session_state.conversation):
                     actions = eval(actions)
                 for action, token in actions.items():
                     st.button(action, on_click=controller.handle_action, args=(token,))
-    # elif role == 'DALL·E':
-    #     # message(c['content'], key=str(i), avatar_style='jdenticon')
-    #     with st.chat_message('DALL·E'):
-    #         st.markdown(message.content)
-    # elif role == 'audio':
-    #     c1, c2 = st.columns([0.6,0.4])
-    #     with c2:
-    #         st.audio(content)
     else:
-        #raise Exception(c)
+        raise Exception(f'Unknown role: {role}')
         with st.chat_message('error'):
             st.markdown(str(message))
 
@@ -184,18 +184,25 @@ else:
     raise NotImplementedError(task)
 
 # 输入框
-if task in Task.ASR.value:
-    attachment = st.file_uploader('上传语音文件', type=controller.asr_media_types, key='attachment', on_change=controller.gen_response, disabled=disabled)
-elif task == Task.GPT4V.value:
-    attachment = st.file_uploader('上传图片', type=controller.gpt_media_types, key='attachment', disabled=disabled)
-
+label = None
+max_chars = 1000
 if task in Task.values():
+    if task in Task.ASR.value:
+        label = '🎤上传语音文件'
+        filetypes = controller.asr_media_types
+        max_chars = 244
+    elif task == Task.GPT4V.value:
+        filetypes = controller.gpt_media_types
+        label = '🎨上传图片'
+        max_chars = 2000
     prompt = st.chat_input(placeholder=help,
                     key='input_text', 
                     disabled=disabled,
-                    # max_chars=1000,
+                    max_chars = max_chars,
                     on_submit = controller.gen_response
                 )
+    if label:
+        attachment = st.file_uploader(label, type=filetypes, key='attachment', disabled=disabled)
 else:
     raise NotImplementedError(task)
 

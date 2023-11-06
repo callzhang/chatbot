@@ -17,8 +17,8 @@ RETRY_TOKEN = '[RETRY]'
 ACTIONS = [RETRY_TOKEN]
 TIMEOUT = 30
 LOGIN_CODE = 'login_code'
-
-
+SERVER_ERROR = '[SERVER_ERROR]'
+    
 
 @unique
 class Task(Enum):
@@ -72,7 +72,7 @@ class AppMessage(BaseModel):
     role: str # system/user/assistant
     content: str | None # text message displayed in the chat, None when using text2img
     queue: deque | None # used to get streaming message from another thread
-    thread: Thread | None # thread used to close when streaming is finished
+    # thread: Thread | None # thread used to close when streaming is finished
     time: datetime # time created
     task: str | None # task type using Task, None for system message
     name: str # user name or model name

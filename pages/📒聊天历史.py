@@ -25,5 +25,5 @@ chats = dialog.get_conversation(st.session_state.name, selected_title)
 if not chats:
     st.info('暂无历史记录')
     st.stop()
-chat_md = utils.conversation2markdown(chats, title=selected_title)
+chat_md = dialog.conversation2markdown(chats, title=selected_title)
 st.markdown(chat_md)
