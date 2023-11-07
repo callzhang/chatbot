@@ -98,7 +98,11 @@ class AppMessage(BaseModel):
             return None
         medias = []
         if isinstance(media_bytes_or_urls_or_str, str):
-            media_bytes_or_urls_or_str = eval(media_bytes_or_urls_or_str)
+            try:
+                media_bytes_or_urls_or_str = eval(media_bytes_or_urls_or_str)
+            except:
+                logging.error(f'Failed to eval media: {media_bytes_or_urls_or_str}')
+                return None
         for m in media_bytes_or_urls_or_str:
             if isinstance(m, str):
                 # url, download to local file

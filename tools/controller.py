@@ -38,7 +38,7 @@ def gen_response(query=None):
         content = user_input, 
         task = task, 
         time = datetime.now(),
-        medias = [attachment] if not isinstance(attachment, list) else attachment if isinstance(attachment, list) else None
+        medias = attachment
     )
     # display and update db
     st.session_state.conversation.append(query_message)

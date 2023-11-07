@@ -75,7 +75,6 @@ st.session_state.selected_title = st.sidebar.radio('聊天历史',
 if st.session_state.guest:
     st.info('访客模式：支持最大10轮对话和20轮聊天历史')
 
-
 # 显示对话内容
 for i, message in enumerate(st.session_state.conversation):
     role, content, medias =  message.role, message.content, message.medias
