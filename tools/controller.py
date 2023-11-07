@@ -33,12 +33,12 @@ def gen_response(query=None):
     # create user query
     print(f'{st.session_state.name}({task}): {user_input}')
     query_message = Message(
-        role = "user",
+        role = model.Role.user.name,
         name = st.session_state.name, 
         content = user_input, 
         task = task, 
         time = datetime.now(),
-        medias = [attachment] if attachment is not None and not isinstance(attachment, list) else None
+        medias = [attachment] if not isinstance(attachment, list) else attachment if isinstance(attachment, list) else None
     )
     # display and update db
     st.session_state.conversation.append(query_message)

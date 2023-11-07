@@ -6,6 +6,8 @@ from datetime import datetime, timedelta
 # from streamlit_extras.colored_header import colored_header
 from streamlit_extras.buy_me_a_coffee import button
 import extra_streamlit_components as stx
+from rich.traceback import install
+install(show_locals=True, word_wrap=True)
 
 # 初始化
 Task = model.Task
@@ -28,6 +30,13 @@ if 'name' not in st.session_state:
     st.session_state.guest = True
     cm = stx.CookieManager()
     code = cm.get(model.LOGIN_CODE)
+    
+    # 通知
+    with open('README.md', 'r') as f:
+        readme = f.read()
+        st.toast(readme, icon='😍')
+        
+    # 登录
     if not code:
         st.info('我是一个集成多个聊天机器人能力的小助手，希望能帮助你提高工作效率😊')
         code = st.text_input('请输入你的访问码', help='仅限员工使用，请勿外传！')
@@ -68,8 +77,6 @@ if st.session_state.guest:
 
 
 # 显示对话内容
-    
-md_formated = ""
 for i, message in enumerate(st.session_state.conversation):
     role, content, medias =  message.role, message.content, message.medias
     if role == 'system':
@@ -208,7 +215,6 @@ else:
 
 ## 聊天历史功能区
 c1, c2, c3, c4 = st.sidebar.columns(4)
-
 with c1: # 新对话
     if st.session_state.guest and len(st.session_state.dialog_history) >= 20:
         disabled, help = True, '访客不支持超过10轮对话，请联系管理员'
@@ -248,8 +254,3 @@ with st.sidebar:
     add_vertical_space(5)
     button(username="derekz", floating=False, width=221)
 
-
-# 通知
-with open('README.md', 'r') as f:
-    readme = f.read()
-    st.toast(readme, icon='😍')
