@@ -71,13 +71,13 @@ class AppMessage(BaseModel):
         
     role: str # system/user/assistant
     content: str | None # text message displayed in the chat, None when using text2img
-    queue: deque | None # used to get streaming message from another thread
     # thread: Thread | None # thread used to close when streaming is finished
     time: datetime # time created
     task: str | None # task type using Task, None for system message
     name: str # user name or model name
-    suggestions: list[str] | None # suggestions for user to choose
-    actions: dict[str, str] | None # actions for user to choose
+    queue: deque | None = None # used to get streaming message from another thread
+    suggestions: list[str] | None = None # suggestions for user to choose
+    actions: dict[str, str] | None = None # actions for user to choose
     medias: list[UploadedFile] | None = None # media files kept in bytes, e.g. images, audio, video
 
     @validator('role', pre=True, always=True)
