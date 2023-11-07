@@ -1,3 +1,5 @@
+# https://cookbook.openai.com/examples/how_to_call_functions_with_chat_models
+
 from retry import retry
 import requests, json, re, logging
 import threading
@@ -32,6 +34,24 @@ temperature = 0.7
 roles2keep = ['system', 'user', 'assistant']
 key2keep = ['role', 'content']
 accepted_attachment_types = ['png', 'jpg', 'jpeg']
+
+# function calling
+functions = [
+    {
+        "name": "google_search",
+        "description": "Search inormation on Google",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "The search query",
+                },
+            },
+            "required": ["query"],
+        },
+    },
+]
 
 def chat_len(conversations):
     chat_string = ' '.join(c['content'] for c in conversations if c['content'])

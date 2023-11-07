@@ -89,6 +89,11 @@ def get_bingai_key(username, return_json=False):
         return json.loads(key)
     else:
         return key
+    
+def get_apify_token():
+    with open('.streamlit/secrets.toml', 'r') as f:
+        data = toml.load(f)
+    return data.get('apify_token')
 
 ## user auth
 sheet_url = st.secrets["public_gsheets_url"]
