@@ -13,6 +13,16 @@ gpt_media_types = openai.accepted_attachment_types
 asr_media_types = asr.accepted_types
 
 
+task_params = {
+    model.Task.ChatGPT.value: openai.task_params,
+    model.Task.GPT4.value: openai.task_params,
+    model.Task.GPT4V.value: openai.task_params,
+    model.Task.text2img.value: imagegen.task_params,
+    model.Task.ASR.value: asr.task_params,
+    model.Task.BingAI.value: bing.task_params,
+}
+
+
 # 对输入进行应答
 def gen_response(query=None):
     task = st.session_state.task
@@ -36,7 +46,7 @@ def gen_response(query=None):
         role = model.Role.user.name,
         name = st.session_state.name, 
         content = user_input, 
-        task = task, 
+        task = model.Task(task).name, 
         time = datetime.now(),
         medias = attachment
     )
@@ -56,7 +66,7 @@ def gen_response(query=None):
             content = '', 
             queue = queue,
             time = datetime.now(),
-            task = task,
+            task = model.Task(task),
             name = task,
         )
         st.session_state.conversation.append(bot_response)
@@ -82,7 +92,7 @@ def gen_response(query=None):
             bot_response = Message(
                 role= Role.assistant.name,
                 content = None ,
-                task = task,
+                task = model.Task(task),
                 name = 'DALL·E',
                 time = datetime.now(),
                 medias = urls
@@ -97,7 +107,7 @@ def gen_response(query=None):
             bot_response = Message(
                 role= Role.assistant.name,
                 content = transcription,
-                task = task,
+                task = model.Task(task),
                 name = 'Whisper',
                 time = datetime.now()
             )

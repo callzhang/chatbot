@@ -14,15 +14,18 @@ except:
 task_params = {
     model.Task.ChatGPT.value: {
         'model': 'gpt-3.5-turbo',
-        'url': 'https://api.openai.com/v1/chat/completions'
+        'url': 'https://api.openai.com/v1/chat/completions',
+        'max_tokens': 8000,
     },
     model.Task.GPT4.value: {
         'model': 'gpt-4',
-        'url': 'https://yeqiu-gpt4-3.xyhelper.cn/v1/chat/completions'
+        'url': 'https://yeqiu-gpt4-3.xyhelper.cn/v1/chat/completions',
+        'max_tokens': 8000,
     },
     model.Task.GPT4V.value: {
         'model': 'gpt-4v',
-        'url': 'http://121.127.44.50:8100/v1/chat/gpt4v'
+        'url': 'http://121.127.44.50:8100/v1/chat/gpt4v',
+        'max_tokens': 4000,
     }
 }
 temperature = 0.7
@@ -60,22 +63,23 @@ def chat_stream(conversations:list, username:str, task:str, attachment=None, gue
     chat_history = [{k: c.dict()[k] for k in key2keep}
                     for c in conversations if c.role in roles2keep and c.content]
     while chat_len(chat_history) > max_length and len(chat_history) > 1:
-        if chat_history[0].role in ['assistant', 'user']:
-            st.toast(f'历史数据过长，舍弃: {chat_history[0].conteng[:10]}')
+        if chat_history[0]['role'] in ['assistant', 'user']:
+            st.toast(f"历史数据过长，舍弃: {chat_history[0]['content'][:10]}")
         chat_history.pop(0)
     chat_history.append(dialog.suggestion_prompt)
-    print(f'sending conversations rounds: {len(chat_history)}, length:{chat_len(chat_history)}')
+    print(f"sending conversations rounds: {len(chat_history)}, length:{chat_len(chat_history)}")
 
     # create a queue to store the responses
     queue = deque()
     
     params = task_params[task]
     url = params['url']
+
     model = params['model']
     data = {
         'messages': chat_history,
         'stream': True,
-        # 'temperature': temperature,
+        'temperature': temperature,
         'url': url,
         'model': model,
         'file': attachment

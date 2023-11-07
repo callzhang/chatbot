@@ -9,6 +9,14 @@ except:
     
 from . import utils
 
+task_params = {
+    model.Task.BingAI.value: {
+        'model': 'bing',
+        'url': 'bing.com',
+        'max_tokens': 4000,
+    }
+}
+
 class BingAI:
     def __init__(self, name, style: ConversationStyle = ConversationStyle.balanced):
         self.bot = None

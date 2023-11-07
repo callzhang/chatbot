@@ -41,7 +41,7 @@ class Task(Enum):
     @classmethod
     def get_name(cls, value):
         return cls(value).name
-    
+
 @unique
 class Role(Enum):
     server = '服务器'
@@ -93,17 +93,22 @@ class AppMessage(BaseModel):
         return task or None
            
     @validator('medias', pre=True, always=True)
-    def set_medias(media_bytes_or_urls_or_str:list):
-        if not media_bytes_or_urls_or_str:
+    def set_medias(media_object:list):
+        if not media_object:
             return None
         medias = []
-        if isinstance(media_bytes_or_urls_or_str, str):
-            try:
-                media_bytes_or_urls_or_str = eval(media_bytes_or_urls_or_str)
-            except:
-                logging.error(f'Failed to eval media: {media_bytes_or_urls_or_str}')
-                return None
-        for m in media_bytes_or_urls_or_str:
+        if isinstance(media_object, str):
+            media_list = eval(media_object)
+        elif isinstance(media_object, list):
+            media_list = media_object
+        elif isinstance(media_object, BytesIO):
+            return [media_object]
+        else:
+            raise Exception(f'Unknown media type: {type(m)}')
+        
+        # process media list
+        assert isinstance(media_list, list)
+        for m in media_list:
             if isinstance(m, str):
                 # url, download to local file
                 if m.startswith('http'):
@@ -130,10 +135,6 @@ class AppMessage(BaseModel):
                     data=data,
                 )
                 medias.append(UploadedFile(rec, m))
-            elif isinstance(m, UploadedFile):
-                medias.append(m)
-            elif isinstance(m, BytesIO):
-                raise NotImplementedError('BytesIO not implemented yet')
             else:
                 raise Exception(f'Unknown media type: {type(m)}')
         return medias or None

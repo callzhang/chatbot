@@ -6,6 +6,14 @@ from . import utils, model
 url = 'https://api.openai.com/v1/images/generations'
 lab_url = 'https://labs.openai.com/'
 
+task_params = {
+    model.Task.text2img.value: {
+        'model': 'clip-dVAE',
+        'url': 'https://api.openai.com/v1/images/generations',
+        'max_tokens': 4000,
+    },
+}
+
 # below are regex patterns to detect user intension to generate an image
 keywords = [
     r'[作|张|副|生成](.*)的?图'

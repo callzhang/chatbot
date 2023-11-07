@@ -191,16 +191,14 @@ else:
 
 # 输入框
 label = None
-max_chars = 1000
 if task in Task.values():
+    max_chars = controller.task_params[task][task]['max_tokens']
     if task in Task.ASR.value:
         label = '🎤上传语音文件'
         filetypes = controller.asr_media_types
-        max_chars = 244
     elif task == Task.GPT4V.value:
-        filetypes = controller.gpt_media_types
         label = '🎨上传图片'
-        max_chars = 2000
+        filetypes = controller.gpt_media_types
     prompt = st.chat_input(placeholder=help,
                     key='input_text', 
                     disabled=disabled,
@@ -237,7 +235,6 @@ with c3: # 导出
                         file_name=f'history.md',
                         mime='text/markdown'):
         st.success('导出成功！')
-        
 with c4: # 修改
     def update_title():
         del st.session_state.conversation
