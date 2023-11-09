@@ -1,7 +1,7 @@
 import streamlit as st, pandas as pd
 # from streamlit_chat import message
 from tools import dialog, utils, controller, model
-import time, logging
+import time, json
 from datetime import datetime, timedelta
 # from streamlit_extras.colored_header import colored_header
 from streamlit_extras.buy_me_a_coffee import button
@@ -94,36 +94,35 @@ for i, message in enumerate(st.session_state.conversation):
     elif role == "assistant":
         with st.chat_message('assistant'):
             msg_placeholder = st.empty()
-            if message.queue is not None: # streaming
-                streaming = True
-                queue = message.queue
-                while streaming:
-                    while len(queue) > 0:
-                        content = queue.popleft()
-                        if isinstance(content, str):
-                            if content == model.FINISH_TOKEN:
-                                controller.finish_reply(message)
-                                streaming = False
-                                break
-                            message.content += content
-                            message.time = datetime.now()
-                        elif isinstance(content, dict): # network error
-                            if v := content.get(model.SERVER_ERROR):
-                                message.content += f'\n\n{v}'
-                                message.actions = {'重试': model.RETRY_TOKEN}
-                                controller.finish_reply(message)
-                                streaming = False
-                    # 超时
-                    timeout = (datetime.now() - message.time).total_seconds() > model.TIMEOUT
-                    if timeout:
-                        message.content += '\n\n请求超时，请重试...'
-                        message.actions = {'重试': model.RETRY_TOKEN}
-                        controller.finish_reply(message)
-                        break
-                    # 渲染
-                    content_full = message.content.replace(model.SUGGESTION_TOKEN, '')
-                    msg_placeholder.markdown(content_full + "▌")
-                    time.sleep(0.1)
+            while (queue := message.queue) is not None: # streaming
+                while len(queue) > 0:
+                    content = queue.popleft()
+                    if isinstance(content, str):
+                        if content == model.FINISH_TOKEN:
+                            controller.finish_reply(message)
+                            streaming = False
+                            break
+                        message.content += content
+                        message.time = datetime.now()
+                    elif isinstance(content, dict): # network error
+                        if v := content.get(model.SERVER_ERROR):
+                            message.content += f'\n\n{v}'
+                            message.actions = {'重试': model.RETRY_TOKEN}
+                            controller.finish_reply(message)
+                        elif v:= content.get(model.TOOL_RESULT):
+                            # message.content += f'```{json.dumps(v, indent=2, ensure_ascii=False)}```'
+                            message.functions = v
+                            # controller.finish_reply(message)
+                # 超时
+                if (datetime.now() - message.time).total_seconds() > model.TIMEOUT:
+                    message.content += '\n\n请求超时，请重试...'
+                    message.actions = {'重试': model.RETRY_TOKEN}
+                    controller.finish_reply(message)
+                    break
+                # 渲染
+                content_full = message.content.replace(model.SUGGESTION_TOKEN, '')
+                msg_placeholder.markdown(content_full + "▌")
+                time.sleep(0.1)
                     
             # 显示完整内容
             content = message.content
@@ -171,10 +170,12 @@ if st.session_state.guest and len(st.session_state.conversation) > 10:
     disabled, help = True, '访客不支持长对话，请联系管理员'
 elif task == Task.ChatGPT.value:
     disabled, help = False, '输入你的问题，然后按回车提交。'
+elif task == Task.ChatSearch.value:
+    disabled, help = st.session_state.guest, '输入你的问题，如果信息需要检索，会自动调用搜索引擎。'
 elif task == Task.GPT4.value:
-    disabled, help = False, '输入你的问题，然后按回车提交。'
+    disabled, help = st.session_state.guest, '输入你的问题，然后按回车提交。'
 elif task == Task.GPT4V.value:
-    disabled, help = False, '输入你的问题，并上传图片，然后按回车提交。'
+    disabled, help = st.session_state.guest, '输入你的问题，并上传图片，然后按回车提交。'
 elif task == Task.BingAI.value:
     if utils.get_bingai_key(st.session_state.name) is None:
         disabled, help = True, '请先在设置中填写BingAI的秘钥'

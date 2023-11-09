@@ -4,6 +4,7 @@ from datetime import datetime
 from . import dialog, openai, bing, imagegen, asr
 import logging
 import re, ast
+from collections import deque
 
 Task = model.Task
 Role = model.Role
@@ -14,6 +15,7 @@ asr_media_types = asr.accepted_types
 
 
 task_params = {
+    model.Task.ChatSearch.value: openai.task_params,
     model.Task.ChatGPT.value: openai.task_params,
     model.Task.GPT4.value: openai.task_params,
     model.Task.GPT4V.value: openai.task_params,
@@ -56,9 +58,11 @@ def gen_response(query=None):
 
     # response
     if task in [Task.ChatGPT.value, Task.GPT4.value, Task.GPT4V.value]:
-        queue = openai.chat_stream(conversations=st.session_state.conversation, 
+        queue = deque()
+        openai.chat_stream(conversation=st.session_state.conversation, 
                                     username=st.session_state.name, 
                                     task=task,
+                                    queue=queue,
                                     attachment=attachment,
                                     guest=st.session_state.guest)
         bot_response = Message(
@@ -66,7 +70,21 @@ def gen_response(query=None):
             content = '', 
             queue = queue,
             time = datetime.now(),
-            task = model.Task(task),
+            task = model.Task(task).name,
+            name = task,
+        )
+        st.session_state.conversation.append(bot_response)
+    elif task == Task.ChatSearch.value:
+        queue = deque()
+        openai.chat_with_search(conversation=st.session_state.conversation, 
+                                    username=st.session_state.name, 
+                                    queue_UI=queue, task=task)
+        bot_response = Message(
+            role= Role.assistant.name,
+            content = '', 
+            queue = queue,
+            time = datetime.now(),
+            task = model.Task(task).name,
             name = task,
         )
         st.session_state.conversation.append(bot_response)
@@ -153,6 +171,11 @@ def display_media(media):
     else:
         raise NotImplementedError(media.tpye)
     return media_type
+
+
+def call_functions(message):
+    functions = message.functions
+    queue = message.queue
     
     
 ## 处理提示

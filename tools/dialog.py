@@ -63,7 +63,7 @@ def init_dialog(username):
     return st.session_state.conversation
 
 
-## conversations: list[Message] -> chat: dict -> save to file
+## conversation: list[Message] -> chat: dict -> save to file
 def update_conversation(username, title, message:model.AppMessage):
     dialog_file = get_dialog_file(username, title)
     # create chat entry as a dict
@@ -88,15 +88,15 @@ def update_conversation(username, title, message:model.AppMessage):
 def get_conversation(username, title):
     dialog_filepath = get_dialog_file(username, title)
     if not os.path.exists(dialog_filepath):
-        conversations = init_conversation(username, title)
+        conversation = init_conversation(username, title)
     else:
-        conversations_df = pd.read_csv(dialog_filepath, index_col=0, parse_dates=['time']).fillna('')
-        conversations_df.dropna(subset=['time'], inplace=True)
-        conversations_df.replace('', None, inplace=True)
-        conversations = conversations_df.to_dict('records')
+        conversation_df = pd.read_csv(dialog_filepath, index_col=0, parse_dates=['time']).fillna('')
+        conversation_df.dropna(subset=['time'], inplace=True)
+        conversation_df.replace('', None, inplace=True)
+        conversation = conversation_df.to_dict('records')
     # convert to Message object
     messages = []
-    for c in conversations:
+    for c in conversation:
         try:
             msg = model.AppMessage(**c)
             messages.append(msg)

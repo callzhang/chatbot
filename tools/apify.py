@@ -8,6 +8,7 @@ from . import utils
 apify_token = utils.get_apify_token()
 
 def search_google(query):
+    print(f'searching google: {query}')
     # Initialize the ApifyClient with your API token
     client = ApifyClient(apify_token)
 
@@ -15,7 +16,7 @@ def search_google(query):
     run_input = {
         "queries": query,
         "maxPagesPerQuery": 1,
-        "resultsPerPage": 20,
+        "resultsPerPage": 10,
         "mobileResults": False,
         "languageCode": "",
         "maxConcurrency": 10,
@@ -67,6 +68,32 @@ def search_google(query):
         
         return parsed_results
     
+
+def parse_web_content(url):
+    """
+    This function converts HTML content to a readable format
+    """
+    print(f'parsing web content: {url}')
+    response = requests.get(url, timeout=30)
+    html_content = response.text
+    # Use BeautifulSoup to parse the HTML
+    soup = BeautifulSoup(html_content, 'html.parser')
+    
+    # Use html2text to convert the parsed HTML to plain text
+    text_maker = html2text.HTML2Text()
+    text_maker.ignore_links = False
+    text_maker.bypass_tables = False
+    text_maker.ignore_images = True
+    text_maker.ignore_emphasis = False
+    readable_text = text_maker.handle(soup.prettify())
+    
+    return readable_text
+
 if __name__ == '__main__':
     res = search_google('北京的地道餐厅')
     pprint(res)
+    print('-'*50)
+    content = parse_web_content(res[4]['url'])
+    pprint(content)
+    with open('test/test.md', 'w') as f:
+        f.write(content)

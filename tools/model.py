@@ -18,11 +18,12 @@ ACTIONS = [RETRY_TOKEN]
 TIMEOUT = 30
 LOGIN_CODE = 'login_code'
 SERVER_ERROR = '[SERVER_ERROR]'
-    
+TOOL_RESULT = '[TOOL_RESULT]'
 
 @unique
 class Task(Enum):
     # internal name : display name
+    ChatSearch = '信息检索'
     ChatGPT = '对话'
     GPT4 = 'GPT4'
     GPT4V = 'GPT4V'
@@ -79,7 +80,8 @@ class AppMessage(BaseModel):
     suggestions: list[str] | None = None # suggestions for user to choose
     actions: dict[str, str] | None = None # actions for user to choose
     medias: list[UploadedFile] | None = None # media files kept in bytes, e.g. images, audio, video
-
+    functions: list[dict] | None = None # functions to be executed, e.g. google search
+    
     @validator('role', pre=True, always=True)
     def set_role(role:str):
         assert role in Role.names(), f'role {role} not in {Role.names()}'
