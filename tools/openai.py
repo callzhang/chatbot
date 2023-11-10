@@ -1,7 +1,7 @@
 # https://cookbook.openai.com/examples/how_to_call_functions_with_chat_models
 
 from retry import retry
-import requests, json, re, logging, time
+import requests, json, re, logging
 import threading
 from collections import deque
 import streamlit as st

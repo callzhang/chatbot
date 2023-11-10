@@ -11,3 +11,6 @@ transformers
 gradio
 shillelagh[all]
 extra_streamlit_components
+apify_client
+beautifulsoup4
+html2text
