@@ -1,7 +1,7 @@
 import re, requests
 import streamlit as st
 from retry import retry
-from . import utils, model
+from . import auth, model
 
 url = 'https://api.openai.com/v1/images/generations'
 lab_url = 'https://labs.openai.com/'
@@ -34,7 +34,7 @@ def gen_image(prompt):
     print(f'prompt: {prompt}')
     header = {
         'Content-Type': 'application/json',
-        'Authorization': f'Bearer {utils.get_openai_key(st.session_state.name, model.Task.text2img.name)}'
+        'Authorization': f'Bearer {auth.get_openai_key(model.Task.text2img.name)}'
     }
     data = {
         "prompt": prompt,

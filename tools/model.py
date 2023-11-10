@@ -12,13 +12,14 @@ from pathlib import PosixPath
 from . import utils
 
 SUGGESTION_TOKEN = '[SUGGESTION]'
-FINISH_TOKEN = 'data: [DONE]'
+FINISH_TOKEN = '[DONE]'
 RETRY_TOKEN = '[RETRY]'
 ACTIONS = [RETRY_TOKEN]
 TIMEOUT = 30
 LOGIN_CODE = 'login_code'
 SERVER_ERROR = '[SERVER_ERROR]'
 TOOL_RESULT = '[TOOL_RESULT]'
+STATUS = '[STATUS]'
 
 @unique
 class Task(Enum):
@@ -93,6 +94,12 @@ class AppMessage(BaseModel):
             logging.warning(f'task {task} not in {Task.names()}')
             task = Task.get_name(task)
         return task or None
+    
+    @validator('time', pre=True, always=True)
+    def set_time(time):
+        if not time:
+            time = datetime.now()
+        return time
            
     @validator('medias', pre=True, always=True)
     def set_medias(media_object:list):

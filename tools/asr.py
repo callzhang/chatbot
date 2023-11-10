@@ -1,5 +1,5 @@
 import openai
-from . import utils, model
+from . import model, auth
 from retry import retry
 import streamlit as st
 
@@ -16,7 +16,7 @@ task_params = {
 def transcript(audio_file, prompt=None):
     """Transcript audio file to text"""
     username = st.session_state.name
-    openai.api_key = utils.get_openai_key(username)
+    openai.api_key = auth.get_openai_key(task=model.task.ASR.value)
     try:
         transcript = openai.Audio.transcribe("whisper-1", audio_file, prompt=prompt)
     except openai.error.InvalidRequestError as e:

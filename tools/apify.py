@@ -3,11 +3,45 @@ from bs4 import BeautifulSoup
 import requests
 from pprint import pprint
 from apify_client import ApifyClient
-from . import utils
+from . import auth
+from retry import retry
 
-apify_token = utils.get_apify_token()
+apify_token = auth.get_apify_token()
 
-def search_google(query):
+
+# function calling
+function_google_search = {
+    "name": "google_search",
+    "description": "Search inormation on Google",
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "query": {
+                "type": "string",
+                "description": "The keywords string to search for information on the internet. Returns the search results in dictionary format. Please use the same language as the user input.",
+            },
+        },
+        "required": ["query"],
+    },
+}
+
+function_parse_web_content = {
+    "name": "parse_web_content",
+    "description": "Parse web content",
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "url": {
+                "type": "string",
+                "description": "The url of the web page to parse. Returns the content of the website in markdown format.",
+            },
+        },
+        "required": ["url"],
+    },
+}
+
+@retry(tries=3)
+def google_search(query):
     print(f'searching google: {query}')
     # Initialize the ApifyClient with your API token
     client = ApifyClient(apify_token)
@@ -68,13 +102,16 @@ def search_google(query):
         
         return parsed_results
     
-
+@retry(tries=3)
 def parse_web_content(url):
     """
     This function converts HTML content to a readable format
     """
     print(f'parsing web content: {url}')
-    response = requests.get(url, timeout=30)
+    try:
+        response = requests.get(url, timeout=30)
+    except:
+        return
     html_content = response.text
     # Use BeautifulSoup to parse the HTML
     soup = BeautifulSoup(html_content, 'html.parser')
@@ -89,8 +126,20 @@ def parse_web_content(url):
     
     return readable_text
 
+#------------tools list-------------
+tool_list = {
+    'google_search': {
+        'call': google_search,
+        'function': function_google_search,
+    },
+    'parse_web_content': {
+        'call': parse_web_content,
+        'function': function_parse_web_content
+    }
+}
+
 if __name__ == '__main__':
-    res = search_google('北京的地道餐厅')
+    res = google_search('北京的地道餐厅')
     pprint(res)
     print('-'*50)
     content = parse_web_content(res[4]['url'])

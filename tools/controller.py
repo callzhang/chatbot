@@ -60,7 +60,6 @@ def gen_response(query=None):
     if task in [Task.ChatGPT.value, Task.GPT4.value, Task.GPT4V.value]:
         queue = deque()
         openai.chat_stream(conversation=st.session_state.conversation, 
-                                    username=st.session_state.name, 
                                     task=task,
                                     queue=queue,
                                     attachment=attachment,
@@ -77,7 +76,6 @@ def gen_response(query=None):
     elif task == Task.ChatSearch.value:
         queue = deque()
         openai.chat_with_search(conversation=st.session_state.conversation, 
-                                    username=st.session_state.name, 
                                     queue_UI=queue, task=task)
         bot_response = Message(
             role= Role.assistant.name,

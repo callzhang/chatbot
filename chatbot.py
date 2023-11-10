@@ -1,6 +1,6 @@
 import streamlit as st, pandas as pd
 # from streamlit_chat import message
-from tools import dialog, utils, controller, model
+from tools import dialog, utils, controller, model, auth
 import time, json
 from datetime import datetime, timedelta
 # from streamlit_extras.colored_header import colored_header
@@ -41,7 +41,7 @@ if 'name' not in st.session_state:
         st.info('我是一个集成多个聊天机器人能力的小助手，希望能帮助你提高工作效率😊')
         code = st.text_input('请输入你的访问码', help='仅限员工使用，请勿外传！')
     if code:
-        user_db = utils.get_db()
+        user_db = auth.get_db()
         access_data = user_db.query('访问码==@code')
         exp_date = datetime.now() + timedelta(days=10)
         if len(access_data):
@@ -92,6 +92,7 @@ for i, message in enumerate(st.session_state.conversation):
                 if content:
                     st.markdown(content)
     elif role == "assistant":
+        status_placeholder = None
         with st.chat_message('assistant'):
             msg_placeholder = st.empty()
             while (queue := message.queue) is not None: # streaming
@@ -111,8 +112,13 @@ for i, message in enumerate(st.session_state.conversation):
                             controller.finish_reply(message)
                         elif v:= content.get(model.TOOL_RESULT):
                             # message.content += f'```{json.dumps(v, indent=2, ensure_ascii=False)}```'
-                            message.functions = v
+                            message.functions = f'```v```'
                             # controller.finish_reply(message)
+                        elif v:= content.get(model.STATUS):
+                            if not status_placeholder: #init
+                                status_placeholder = st.status(v, expanded=True)
+                            else:
+                                status_placeholder.write(v)
                 # 超时
                 if (datetime.now() - message.time).total_seconds() > model.TIMEOUT:
                     message.content += '\n\n请求超时，请重试...'
@@ -155,6 +161,9 @@ for i, message in enumerate(st.session_state.conversation):
                     actions = eval(actions)
                 for action, token in actions.items():
                     st.button(action, on_click=controller.handle_action, args=(token,))
+        # close the status bar
+        if status_placeholder:
+            status_placeholder.update(label='✅信息检索完成', state='complete', expanded=False)
     else:
         raise Exception(f'Unknown role: {role}')
         with st.chat_message('error'):

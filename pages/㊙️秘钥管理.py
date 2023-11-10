@@ -1,7 +1,7 @@
 import streamlit as st
 import json, os, time
 import extra_streamlit_components as stx
-from tools import utils, model
+from tools import utils, model, auth
 
 st.title('秘钥输入')
 st.write('请在下方输入秘钥，我们不会泄露你的秘钥，但是请注意不要泄露给他人')
@@ -22,12 +22,12 @@ with openai_tab:
     st.checkbox('OpenAI秘钥已保存', value=os.path.exists(openai_key_file), disabled=True)
     openai_key = ''
     if os.path.exists(openai_key_file):
-        openai_key = utils.get_openai_key(st.session_state.name)
+        openai_key = auth.get_openai_key(st.session_state.name)
     openai_key = st.text_input('请输入OpenAI的秘钥', type='password', 
                                placeholder='sk-*******', value=openai_key, 
                                help='从[这个](https://beta.openai.com/account/api-keys)页面获取秘钥')
     if st.button('保存', key='save_openai_key'):
-        utils.get_openai_key.clear_cache()
+        auth.get_openai_key.clear_cache()
         if not openai_key and os.path.exists(openai_key_file):
             # 清除秘钥
             os.remove(openai_key_file)
