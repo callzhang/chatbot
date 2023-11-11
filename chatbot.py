@@ -94,6 +94,7 @@ for i, message in enumerate(st.session_state.conversation):
     elif role == "assistant":
         with st.chat_message('assistant'):
             status_placeholder = st.empty()
+            status_container = None
             msg_placeholder = st.empty()
             while (queue := message.queue) is not None: # streaming
                 while len(queue) > 0:
@@ -115,9 +116,9 @@ for i, message in enumerate(st.session_state.conversation):
                             message.functions = f'```v```'
                             # controller.finish_reply(message)
                         elif v:= content.get(model.STATUS):
-                            if not status_placeholder: #init
-                                status_placeholder = status_placeholder.status('正在检索', expanded=True)
-                            status_placeholder.write(v)
+                            if not status_container: #init
+                                status_container = status_placeholder.status('正在检索', expanded=True)
+                            status_container.write(v)
                             message.status.append(v)
                 # 超时
                 if (datetime.now() - message.time).total_seconds() > model.TIMEOUT:
@@ -132,11 +133,13 @@ for i, message in enumerate(st.session_state.conversation):
             
             # status
             if message.status:
-                with status_placeholder.status('正在检索') as status:
-                    for s in message.status:
-                        status.write(s)
-                    status.update(label='检索完成', state="complete", expanded=False)
-            
+                if not status_container:
+                    with status_placeholder.status('正在检索') as status:
+                        for s in message.status:
+                            status.write(s)
+                        status.update(label='检索完成', state="complete", expanded=False)
+                else:
+                    status_container.update(label='检索完成', state="complete", expanded=False)
             # 显示完整内容
             content = message.content
             suggestions = message.suggestions

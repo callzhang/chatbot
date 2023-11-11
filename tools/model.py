@@ -101,7 +101,7 @@ class AppMessage(BaseModel):
             time = datetime.now()
         return time
            
-    @validator('medias', pre=True, always=True)
+    @validator('medias', pre=True)
     def set_medias(media_object:list):
         if not media_object:
             return None
@@ -148,14 +148,14 @@ class AppMessage(BaseModel):
                 raise Exception(f'Unknown media type: {type(m)}')
         return medias or None
     
-    @validator('suggestions', pre=True, always=True)
+    @validator('suggestions', pre=True)
     def set_suggestions(suggestions:list[str]|str):
         if isinstance(suggestions, str) and suggestions:
             suggestions = eval(suggestions)
             assert isinstance(suggestions, list)
         return suggestions or None
     
-    @validator('actions', pre=True, always=True)
+    @validator('actions', pre=True)
     def set_actions(actions:list[str]|str):
         if isinstance(actions, str) and actions:
             actions = eval(actions)
@@ -164,6 +164,16 @@ class AppMessage(BaseModel):
                 assert v in ACTIONS
         return actions or None
     
+    @validator('status', pre=True)
+    def set_status(status_list: list):
+        if not status_list:
+            return []
+        if isinstance(status_list, str):
+            status_list = eval(status_list)
+        if isinstance(status_list, list):
+            return status_list
+        else:
+            raise ValueError(status_list)
 
 if __name__ == '__main__':
     msg = AppMessage(

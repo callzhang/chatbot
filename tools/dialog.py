@@ -8,7 +8,7 @@ from . import model
 import streamlit as st
 
 CHAT_LOG_ROOT = Path('chats')
-CHAT_SAVE_KEYS = ['role', 'name', 'content', 'time', 'task', 'suggestions', 'actions', 'medias']
+CHAT_SAVE_KEYS = ['role', 'name', 'content', 'time', 'task', 'suggestions', 'actions', 'medias', 'status']
 # create folder
 if not os.path.exists(CHAT_LOG_ROOT):
     os.makedirs(CHAT_LOG_ROOT)

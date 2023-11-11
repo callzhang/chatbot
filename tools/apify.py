@@ -69,6 +69,7 @@ def google_search(query):
 
     # Fetch and print Actor results from the run's dataset (if there are any)
     parsed_results = []
+    also_asks = []
     for item in client.dataset(run["defaultDatasetId"]).iterate_items():
         '''{
             "title":"The 38 Essential Restaurants in New York City",
@@ -99,8 +100,8 @@ def google_search(query):
         peopleAlsoAsk = item['peopleAlsoAsk']
         for result in peopleAlsoAsk:
             parsed_results.append({k:v for k, v in result.items() if k in ['answer', 'question', 'url', 'title']})
-        
-        return parsed_results
+            also_asks = [a['question'] for a in peopleAlsoAsk]
+        return parsed_results, also_asks
     
 @retry(tries=3)
 def parse_web_content(url):

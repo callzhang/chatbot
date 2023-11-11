@@ -17,7 +17,8 @@ task_params = {
     model.Task.ChatSearch.value: {
         'model': 'gpt-3.5-turbo-1106', #'gpt-3.5-turbo',
         'url': 'https://api.openai.com/v1/chat/completions',
-        'max_tokens': 8000,
+        'max_tokens': 16000,
+        'max_web_content': 4000
     },
     model.Task.ChatGPT.value: {
         'model': 'gpt-3.5-turbo', #'gpt-3.5-turbo',
@@ -169,14 +170,15 @@ def chat_with_search_actor(task, data, header, queue_UI:deque):
     if not tool_results:
         queue_UI.append(model.FINISH_TOKEN)
         return
-    search_results = []
+    search_results, also_asks = [], []
     for name, func, kargs in get_function_calls(tool_results):
         assert name == 'google_search'
         message = f'🔍正在检索: {kargs["query"]}'
         queue_UI.append({model.STATUS: message})
-        search_result = func(**kargs)
+        search_result, also_ask = func(**kargs)
         print(f'🔍search result: \n\n{json.dumps(search_result, indent=2, ensure_ascii=False)}')
         search_results += search_result
+        also_asks += also_ask
     # search_result_content = [f"[{r['title']}]({r['url']})" for r in search_results]
     # search_result_content = '\n\n'.join(search_result_content) + '\n\n'
     # queue_UI.append(search_result_content)
@@ -187,7 +189,7 @@ def chat_with_search_actor(task, data, header, queue_UI:deque):
             question = chat['content']
     web_content = get_search_content(task, question, search_results, queue_UI)
     # streaming the result using regular chat_stream
-    answer_question_with_search_result(task, question, web_content, queue_UI)
+    answer_question_with_search_result(task, question, also_asks, web_content, queue_UI)
     # finish
     queue_UI.append(model.FINISH_TOKEN)
 
@@ -220,18 +222,21 @@ def get_search_content(task, question, search_result, queue_UI):
         URL = kargs["url"]
         title = [r['title'] for r in search_result if r['url']==URL][0]
         queue_UI.append({model.STATUS: f'⏳正在阅读: [{title}]({URL})'})
+        # 浏览信息
         web_content = func(**kargs)
         if not web_content:
             queue_UI.append({model.STATUS: f'❌无法访问: [{title}]({URL})'})
         else:
-            print(f'🔍Web content: \n\n{web_content}')
-            web_contents.append(search_result)
+            print(f'🔍Ingested web content: {title} with {len(web_content)} chars')
+            web_content = web_content[:task_params[task]['max_web_content']]
+            web_contents.append(web_content)
     return web_contents
     
 
-def answer_question_with_search_result(task, question, web_content, queue_UI):
-    prompt = '请根据用户问题和网页内容，总结网页信息，请尽量整理得详细一些，不要遗漏。内容长度以网页信息的三分之一为宜。'
+def answer_question_with_search_result(task, question, also_asks, web_content, queue_UI):
+    prompt = '请根据用户问题和网页内容，总结网页信息，请尽量整理得详细一些，不要遗漏。并且总结一些观点并进行详细解答。内容长度至少500字。如果网页内容没有实质性信息，请回答信息量不够。'
     query = f'''【用户问题】{question}
+    【相关问题】{';'.join(also_asks)}
     【网页内容】{web_content}
     '''
     chat_history = [

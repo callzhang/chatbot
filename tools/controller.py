@@ -43,7 +43,7 @@ def gen_response(query=None):
         return
     
     # create user query
-    print(f'{st.session_state.name}({task}): {user_input}')
+    # print(f'{st.session_state.name}({task}): {user_input}')
     query_message = Message(
         role = model.Role.user.name,
         name = st.session_state.name, 
@@ -57,6 +57,7 @@ def gen_response(query=None):
     dialog.update_conversation(st.session_state.name, st.session_state.selected_title, query_message)
 
     # response
+    print(f'Start task({task}): {st.session_state.conversation[-1].content}')
     if task in [Task.ChatGPT.value, Task.GPT4.value, Task.GPT4V.value]:
         queue = deque()
         openai.chat_stream(conversation=st.session_state.conversation, 
@@ -77,7 +78,6 @@ def gen_response(query=None):
         queue = deque()
         openai.chat_with_search(conversation=st.session_state.conversation, 
                                     queue_UI=queue, task=task)
-        print(f'Start search: {st.session_state.conversation[-1].content}')
         bot_response = Message(
             role= Role.assistant.name,
             content = '', 
