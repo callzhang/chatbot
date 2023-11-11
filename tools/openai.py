@@ -5,12 +5,7 @@ import requests, json, re, logging
 import threading
 from collections import deque
 import streamlit as st
-from . import dialog, auth, model, apify
-try:
-    from transformers import AutoTokenizer
-    tokenizer = AutoTokenizer.from_pretrained("gpt2")
-except:
-    pass
+from . import dialog, auth, model, apify, utils
 
 # 参数
 task_params = {
@@ -227,8 +222,8 @@ def get_search_content(task, question, search_result, queue_UI):
         if not web_content:
             queue_UI.append({model.STATUS: f'❌无法访问: [{title}]({URL})'})
         else:
-            print(f'🔍Ingested web content: {title} with {len(web_content)} chars')
-            web_content = web_content[:task_params[task]['max_web_content']]
+            print(f'🔍Ingested web content: {title} with {utils.token_size(web_content)} tokens')
+            web_content = utils.truncate_text(web_content, task_params[task]['max_web_content'])
             web_contents.append(web_content)
     return web_contents
     
@@ -277,12 +272,12 @@ def conversation2history(conversation:list[model.AppMessage], guest, task) -> li
     max_length = 500 if guest else task_params[task]['max_tokens']
     chat_history = [{k: c.dict()[k] for k in key2keep}
                     for c in conversation if c.role in roles2keep and c.content]
-    while chat_len(chat_history) > max_length and len(chat_history) > 1:
+    while (l:=chat_len(chat_history)) > max_length and len(chat_history) > 1:
         if chat_history[0]['role'] in ['assistant', 'user']:
             st.toast(f"历史数据过长，舍弃: {chat_history[0]['content'][:10]}")
         chat_history.pop(0)
     chat_history.append(dialog.suggestion_prompt)
-    print(f"sending conversation rounds: {len(chat_history)}, length:{chat_len(chat_history)}")
+    print(f"sending conversation rounds: {len(chat_history)}, length:{l}")
     return chat_history
 
 # convert openai function_call result to (name, function, query)
@@ -305,10 +300,7 @@ def get_function_calls(function_calls, max_calls=3):
 def chat_len(conversation):
     chat_string = ' '.join(c['content'] for c in conversation if c['content'])
     # count tokens
-    try:
-        count = len(tokenizer.encode(chat_string))
-    except:
-        count = len(chat_string)
+    count = utils.token_size(chat_string)
     return count
 
 

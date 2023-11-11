@@ -1,6 +1,16 @@
 import os, re
+from transformers import GPT2Tokenizer
 
+tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
 
+# token size
+def token_size(text):
+    return len(tokenizer.encode(text))
+
+def truncate_text(text, max_len=1024):
+    tokens = tokenizer.tokenize(text)
+    text_t = tokenizer.convert_tokens_to_string(tokens[:max_len])
+    return text_t
 
 ## Markdown
 # utls to markdown
@@ -49,3 +59,9 @@ def parse_file_info(path_or_str):
     mime_type, encoding = mimetypes.guess_type(filename)
     # filetype = os.path.splitext(filename)[-1].replace('.','')
     return filename, mime_type
+
+
+if __name__ == '__main__':
+    print(token_size('hello world'))
+    print(truncate_text('These smaller models provide a good balance between performance and resource usage, making them suitable for environments where computational resources are a concern. Remember that while smaller models are faster and use less memory, they might not capture the nuances of language as effectively as larger models like GPT-2 or BERT-base.', 5))
+    

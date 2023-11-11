@@ -23,7 +23,7 @@ st.set_page_config(page_title="💬星尘小助手", page_icon="💬",
             #  'Report a bug': "https://www.extremelycoolapp.com/bug",
              'About': "# 星尘小助手. \n *仅限员工使用，请勿外传!*"
     })
-st.title("💬星尘小助手")
+st.title("💬星尘小助手") 
     
 ## user auth
 if 'name' not in st.session_state:
@@ -158,6 +158,7 @@ for i, message in enumerate(st.session_state.conversation):
                 message.content = content
                 msg_placeholder.markdown(content)
             if suggestions and i == len(st.session_state.conversation) -1:
+                suggestions = set(suggestions)
                 cols = st.columns(len(suggestions))
                 for col, suggestion in zip(cols, suggestions):
                     with col:
@@ -177,7 +178,7 @@ for i, message in enumerate(st.session_state.conversation):
             st.markdown(str(message))
 
     # page layout
-    if st.session_state.desired_layout != 'wide' and message.role=='assistant' and len(message.content) > WIDE_LAYOUT_THRESHOLD:
+    if st.session_state.desired_layout != 'wide' and message.role=='assistant' and utils.token_size(message.content) > WIDE_LAYOUT_THRESHOLD:
         st.session_state.desired_layout = 'wide'
         st.rerun()
 

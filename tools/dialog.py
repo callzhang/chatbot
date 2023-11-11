@@ -132,8 +132,6 @@ def get_dialog_file(username, title):
         chat_file = dialog.iloc[0]['file']
         return chat_file
     else:
-        # 如果没有找到，则返回第一条结果?
-        # chat_file = history.iloc[0]['file']
         raise Exception('No dialog found! Check your code!')
     
     
