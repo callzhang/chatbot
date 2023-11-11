@@ -92,19 +92,19 @@ for i, message in enumerate(st.session_state.conversation):
                 if content:
                     st.markdown(content)
     elif role == "assistant":
-        status_placeholder = None
         with st.chat_message('assistant'):
+            status_placeholder = st.empty()
             msg_placeholder = st.empty()
             while (queue := message.queue) is not None: # streaming
                 while len(queue) > 0:
                     content = queue.popleft()
+                    message.time = datetime.now()
                     if isinstance(content, str):
                         if content == model.FINISH_TOKEN:
                             controller.finish_reply(message)
                             streaming = False
                             break
                         message.content += content
-                        message.time = datetime.now()
                     elif isinstance(content, dict): # network error
                         if v := content.get(model.SERVER_ERROR):
                             message.content += f'\n\n{v}'
@@ -116,9 +116,9 @@ for i, message in enumerate(st.session_state.conversation):
                             # controller.finish_reply(message)
                         elif v:= content.get(model.STATUS):
                             if not status_placeholder: #init
-                                status_placeholder = st.status(v, expanded=True)
-                            else:
-                                status_placeholder.write(v)
+                                status_placeholder = status_placeholder.status('正在检索', expanded=True)
+                            status_placeholder.write(v)
+                            message.status.append(v)
                 # 超时
                 if (datetime.now() - message.time).total_seconds() > model.TIMEOUT:
                     message.content += '\n\n请求超时，请重试...'
@@ -129,7 +129,14 @@ for i, message in enumerate(st.session_state.conversation):
                 content_full = message.content.replace(model.SUGGESTION_TOKEN, '')
                 msg_placeholder.markdown(content_full + "▌")
                 time.sleep(0.1)
-                    
+            
+            # status
+            if message.status:
+                with status_placeholder.status('正在检索') as status:
+                    for s in message.status:
+                        status.write(s)
+                    status.update(label='检索完成', state="complete", expanded=False)
+            
             # 显示完整内容
             content = message.content
             suggestions = message.suggestions
@@ -161,9 +168,6 @@ for i, message in enumerate(st.session_state.conversation):
                     actions = eval(actions)
                 for action, token in actions.items():
                     st.button(action, on_click=controller.handle_action, args=(token,))
-        # close the status bar
-        if status_placeholder:
-            status_placeholder.update(label='✅信息检索完成', state='complete', expanded=False)
     else:
         raise Exception(f'Unknown role: {role}')
         with st.chat_message('error'):

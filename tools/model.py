@@ -73,7 +73,7 @@ class AppMessage(BaseModel):
         
     role: str # system/user/assistant
     content: str | None # text message displayed in the chat, None when using text2img
-    # thread: Thread | None # thread used to close when streaming is finished
+    status: list[str] = [] # status updates for searching or other actions
     time: datetime # time created
     task: str | None # task type using Task, None for system message
     name: str # user name or model name

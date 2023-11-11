@@ -77,6 +77,7 @@ def gen_response(query=None):
         queue = deque()
         openai.chat_with_search(conversation=st.session_state.conversation, 
                                     queue_UI=queue, task=task)
+        print(f'Start search: {st.session_state.conversation[-1].content}')
         bot_response = Message(
             role= Role.assistant.name,
             content = '', 
