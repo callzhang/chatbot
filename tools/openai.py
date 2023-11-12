@@ -38,8 +38,9 @@ accepted_attachment_types = ['png', 'jpg', 'jpeg']
 
 
 ## ------------receiving streaming server-sent events（异步）------------
-def chat_stream(conversation:list, task:str, queue:deque, attachment=None, guest=True, tools=None):
+def chat_stream(conversation:list, task:str, attachment=None, guest=True, tools=None):
     chat_history = conversation2history(conversation, guest, task)
+    queue = deque()
     # create a queue to store the responses
     url = task_params[task]['url']
     model = task_params[task]['model']
@@ -138,7 +139,7 @@ def get_response(task, data, header, queue=None):
     
 
 ##--------------------信息检索+聊天------------------
-def chat_with_search(conversation:list, task:str, queue_UI:deque):
+def chat_with_search(conversation:list, task:str):
     chat_history = conversation2history(conversation, guest=False, task=task)
     data = {
         'messages': chat_history,
@@ -151,14 +152,20 @@ def chat_with_search(conversation:list, task:str, queue_UI:deque):
     header = {
         'Authorization': f'Bearer {auth.get_openai_key(task)}'
     }
+    queue_UI = deque()
     thread = threading.Thread(target=chat_with_search_actor, args=(task, data, header, queue_UI))
     thread.start()
-    
+    return queue_UI
     
 def chat_with_search_actor(task, data, header, queue_UI:deque):
     '''the thread runner for chat_with_search'''
     result = get_response(task, data, header, queue_UI)
-    assert model.TOOL_RESULT in result
+    if result:
+        assert model.TOOL_RESULT in result
+    else:
+        queue_UI.append(model.FINISH_TOKEN)
+        return
+    
     tool_results = result[model.TOOL_RESULT]
     
     # web search

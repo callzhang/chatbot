@@ -240,7 +240,6 @@ with c1: # 新对话
         title = dialog.new_dialog(st.session_state.name)
         st.session_state.new_chat = title
         st.session_state.audio = None
-        st.session_state.layout = 'centered'
         st.rerun()
 with c2: # 删除
     if st.button('⛔', help='删除当前聊天记录', disabled=st.session_state.guest):

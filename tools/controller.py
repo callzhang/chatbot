@@ -4,7 +4,6 @@ from datetime import datetime
 from . import dialog, openai, bing, imagegen, asr
 import logging
 import re, ast
-from collections import deque
 
 Task = model.Task
 Role = model.Role
@@ -59,10 +58,9 @@ def gen_response(query=None):
     # response
     print(f'Start task({task}): {st.session_state.conversation[-1].content}')
     if task in [Task.ChatGPT.value, Task.GPT4.value, Task.GPT4V.value]:
-        queue = deque()
-        openai.chat_stream(conversation=st.session_state.conversation, 
+        queue = openai.chat_stream(conversation=st.session_state.conversation, 
                                     task=task,
-                                    queue=queue,
+                                    # queue=queue,
                                     attachment=attachment,
                                     guest=st.session_state.guest)
         bot_response = Message(
@@ -75,9 +73,8 @@ def gen_response(query=None):
         )
         st.session_state.conversation.append(bot_response)
     elif task == Task.ChatSearch.value:
-        queue = deque()
-        openai.chat_with_search(conversation=st.session_state.conversation, 
-                                    queue_UI=queue, task=task)
+        logging.info(f'chat search: {user_input}')
+        queue = openai.chat_with_search(conversation=st.session_state.conversation, task=task)
         bot_response = Message(
             role= Role.assistant.name,
             content = '', 
