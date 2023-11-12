@@ -1,5 +1,7 @@
-import os, re
+import os, re, time
 from transformers import GPT2Tokenizer
+from collections import defaultdict
+from functools import wraps
 
 tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
 
@@ -11,6 +13,30 @@ def truncate_text(text, max_len=1024):
     tokens = tokenizer.tokenize(text)
     text_t = tokenizer.convert_tokens_to_string(tokens[:max_len])
     return text_t
+
+## cache management
+def cached(timeout=3600):
+    # thread safe cache
+    cache = defaultdict()
+
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            key = str(args) + str(kwargs)
+    
+            if key not in cache or time.time() - cache[key]['time'] > timeout:
+                result = func(*args, **kwargs)
+                cache[key] = {'result': result, 'time': time.time()}
+            return cache[key]['result']
+
+        wrapper.cache = cache
+        # f.clear_cache() to clear the cache
+        wrapper.clear_cache = cache.clear
+        # f.delete_cache(key) to delete the cache of key
+        wrapper.delete_cache = cache.pop
+        return wrapper
+
+    return decorator
 
 ## Markdown
 # utls to markdown

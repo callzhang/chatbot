@@ -1,41 +1,13 @@
 import pandas as pd
 import streamlit as st
 import os, time
-from datetime import datetime
-from pathlib import Path
-from . import model
+from . import model, utils
 from retry import retry
-from functools import wraps
-from collections import defaultdict
-
-## cache management
-def cached(timeout=3600):
-    # thread safe cache
-    cache = defaultdict()
-
-    def decorator(func):
-        @wraps(func)
-        def wrapper(*args, **kwargs):
-            key = str(args) + str(kwargs)
-    
-            if key not in cache or time.time() - cache[key]['time'] > timeout:
-                result = func(*args, **kwargs)
-                cache[key] = {'result': result, 'time': time.time()}
-            return cache[key]['result']
-
-        wrapper.cache = cache
-        # f.clear_cache() to clear the cache
-        wrapper.clear_cache = cache.clear
-        # f.delete_cache(key) to delete the cache of key
-        wrapper.delete_cache = cache.pop
-        return wrapper
-
-    return decorator
 
 
 ## 管理秘钥
 import json, toml
-@cached()
+@utils.cached()
 def get_default_key(task):
     with open('.streamlit/secrets.toml', 'r') as f:
         data = toml.load(f)
@@ -48,7 +20,7 @@ def get_default_key(task):
     return key
 
 
-@cached()
+@utils.cached()
 def get_openai_key(task=None, username=None):
     username=st.session_state.name
     my_openai_key_file = f'secrets/{username}/openai_key.json'
@@ -60,7 +32,7 @@ def get_openai_key(task=None, username=None):
     return key
 
 
-@cached()
+@utils.cached()
 def get_bingai_key(return_json=False):
     username=st.session_state.name
     bing_key_file = f'secrets/{username}/bing_key.json'
@@ -85,7 +57,7 @@ sheet_url = st.secrets["public_gsheets_url"]
 from shillelagh.backends.apsw.db import connect
 
 # user management
-@cached(timeout=600)
+@utils.cached(timeout=600)
 @retry(tries=3, delay=2, backoff=2)
 def get_db():
     msg = st.toast('正在连接数据库，请稍等...')

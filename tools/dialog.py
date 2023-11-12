@@ -198,6 +198,39 @@ def save_files_to_uri_list(file: UploadedFile):
     return str(filepath)
 
 
+## -------- assistant session ---------
+THREAD_FILE = 'threads.csv'
+def get_threads(username):
+    threads_history_file = CHAT_LOG_ROOT/username/THREAD_FILE
+    if os.path.exists(threads_history_file):
+        history = pd.read_csv(threads_history_file, index_col=0)
+    else:
+        history = pd.DataFrame(columns=['time', 'title', 'thread_id', 'assistant_id'])
+    return history
+
+
+def new_thread(username, thread_id, assistant_id, title=None):
+    history = get_threads(username)
+    new_dialog = pd.DataFrame([{
+        'time': datetime.now(),
+        'title': title if title else datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+        'thread_id': thread_id,
+        'assistant_id': assistant_id,
+    }])
+    history = pd.concat([new_dialog, history], ignore_index=True)
+    os.makedirs(CHAT_LOG_ROOT/username, exist_ok=True)
+    history.to_csv(CHAT_LOG_ROOT/username/THREAD_FILE)
+    return title
+
+
+def delete_thread(username, thread_id):
+    history = get_dialog_history(username)
+    chat = history.query('thread_id==@thread_id')
+    history.drop(chat.index.values, inplace=True)
+    history.to_csv(CHAT_LOG_ROOT/username/THREAD_FILE)
+
+
+
 # export
 # 导出对话内容到 markdown
 def conversation2markdown(messages:list[model.AppMessage], title=""):
