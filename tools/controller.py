@@ -42,7 +42,6 @@ def gen_response(query=None):
         return
     
     # create user query
-    # print(f'{st.session_state.name}({task}): {user_input}')
     query_message = Message(
         role = model.Role.user.name,
         name = st.session_state.name, 
@@ -60,7 +59,6 @@ def gen_response(query=None):
     if task in [Task.ChatGPT.value, Task.GPT4.value, Task.GPT4V.value]:
         queue = openai.chat_stream(conversation=st.session_state.conversation, 
                                     task=task,
-                                    # queue=queue,
                                     attachment=attachment,
                                     guest=st.session_state.guest)
         bot_response = Message(
