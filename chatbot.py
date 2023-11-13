@@ -103,7 +103,6 @@ for i, message in enumerate(st.session_state.conversation):
                     if isinstance(content, str):
                         if content == model.FINISH_TOKEN:
                             controller.finish_reply(message)
-                            streaming = False
                             break
                         message.content += content
                     elif isinstance(content, dict): # network error
@@ -120,6 +119,8 @@ for i, message in enumerate(st.session_state.conversation):
                                 status_container = status_placeholder.status('正在检索', expanded=True)
                             status_container.write(v)
                             message.status.append(v)
+                else:
+                    message.content += '.'
                 # 超时
                 if (datetime.now() - message.time).total_seconds() > model.TIMEOUT:
                     message.content += '\n\n请求超时，请重试...'

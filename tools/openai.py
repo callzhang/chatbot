@@ -133,6 +133,7 @@ def get_response(task, data, header, queue=None):
         }
     else:
         estring = f'出错啦，请重试: {response.status_code}, {response.text}'
+        logging.error(estring)
         logging.error(json.dumps(data, indent=2, ensure_ascii=False))
         queue.append({model.SERVER_ERROR: estring})
         return
@@ -154,22 +155,16 @@ def chat_with_search(conversation:list, task:str):
     }
     queue_UI = deque()
     thread = threading.Thread(target=chat_with_search_actor, args=(task, data, header, queue_UI))
+    # thread.daemon = True
     thread.start()
     return queue_UI
     
 def chat_with_search_actor(task, data, header, queue_UI:deque):
     '''the thread runner for chat_with_search'''
     result = get_response(task, data, header, queue_UI)
-    if result:
-        assert model.TOOL_RESULT in result
-    else:
-        queue_UI.append(model.FINISH_TOKEN)
-        return
-    
-    tool_results = result[model.TOOL_RESULT]
     
     # web search
-    if not tool_results:
+    if not result or not (tool_results := result[model.TOOL_RESULT]):
         queue_UI.append(model.FINISH_TOKEN)
         return
     search_results, also_asks = [], []
@@ -178,11 +173,12 @@ def chat_with_search_actor(task, data, header, queue_UI:deque):
         message = f'🔍正在检索: {kargs["query"]}'
         queue_UI.append({model.STATUS: message})
         search_result, also_ask = func(**kargs)
-        print(f'🔍search result: \n\n{json.dumps(search_result, indent=2, ensure_ascii=False)}')
+        # print(f'🔍search result: \n\n{json.dumps(search_result, indent=2, ensure_ascii=False)}')
         search_results += search_result
         also_asks += also_ask
-    # search_result_content = [f"[{r['title']}]({r['url']})" for r in search_results]
-    # search_result_content = '\n\n'.join(search_result_content) + '\n\n'
+    search_result_content = [f"[{r['title']}]({r['url']})" for r in search_results]
+    search_result_content = '\n'.join(search_result_content)
+    logging.info(search_result_content)
     # queue_UI.append(search_result_content)
     
     # let the GPT do the decision, then parse the web content

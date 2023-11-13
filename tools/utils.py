@@ -1,11 +1,27 @@
-import os, re, time
+import os, re, time,logging
 from transformers import GPT2Tokenizer
 from collections import defaultdict
 from functools import wraps
 
-tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
+## logger
+logger = logging.getLogger('my_logger')
+logger.setLevel(logging.INFO)  # Set the minimum level of log messages to capture
+# Create a file handler to write logs to a file
+file_handler = logging.FileHandler('log.txt')
+file_handler.setLevel(logging.DEBUG)  # Set the minimum level for file logging
+# Create a console handler to print logs to the console
+console_handler = logging.StreamHandler()
+console_handler.setLevel(logging.INFO)  # Set the minimum level for console logging
+# Create a formatter and set it for both handlers
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+file_handler.setFormatter(formatter)
+console_handler.setFormatter(formatter)
+# Add handlers to the logger
+logger.addHandler(file_handler)
+logger.addHandler(console_handler)
 
-# token size
+## token size
+tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
 def token_size(text):
     return len(tokenizer.encode(text))
 

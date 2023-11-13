@@ -8,4 +8,6 @@ test/
 archieve/
 temp/
 *.zip
-*.icloud
+# *.icloud
+chatbot.py
+log.txt
