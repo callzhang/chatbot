@@ -61,6 +61,8 @@ def gen_response(query=None):
                                     task=task,
                                     attachment=attachment,
                                     guest=st.session_state.guest)
+        if openai.DEBUG:
+            queue.append('debug: chat_stream returned\n\n')
         bot_response = Message(
             role= Role.assistant.name,
             content = '', 
