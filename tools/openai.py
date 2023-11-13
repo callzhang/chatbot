@@ -6,6 +6,9 @@ import threading
 from collections import deque
 import streamlit as st
 from . import dialog, auth, model, apify, utils
+from openai import OpenAI
+
+client = OpenAI(api_key=st.secrets["openai-key"], timeout=30)
 
 # 参数
 task_params = {
@@ -83,7 +86,7 @@ def get_response(task, data, header, queue=None):
         fobject = {'file': (file.name, file)}
         # header['Content-Type'] = 'multipart/form-data' # The issue is that the Content-Type header in your request is missing the boundary parameter, which is crucial for the server to parse the multipart form data correctly. The requests library in Python should add this parameter automatically when you pass data through the files parameter. It seems like the Content-Type header is being set manually somewhere which is overriding the automatically set header by requests. Make sure that you are not setting the Content-Type header manually anywhere in your code or in any middleware that might be modifying the request.
         response = requests.post(url, headers=header, data=data2, files=fobject, stream=stream, timeout=300)
-    if stream and response.ok:
+    if stream and queue is not None and response.ok:
         tool_results = []
         for line in response.iter_lines():
             if not line:

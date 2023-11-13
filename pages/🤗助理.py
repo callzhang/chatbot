@@ -1,8 +1,11 @@
 from openai import OpenAI
 import streamlit as st
 from functools import lru_cache
-from tools import utils, dialog
+from tools import utils, dialog, openai, model
 from datetime import datetime
+from collections import deque
+import time
+from threading import Thread
 
 client = OpenAI(
     # defaults to os.environ.get("OPENAI_API_KEY")
@@ -51,31 +54,54 @@ with st.chat_message('ai'):
 if user_input := st.chat_input('请输入问题'):
     with st.chat_message('human'):
         st.write(user_input)
-    with st.spinner('Thinking...'):
-        response = client.chat.completions.create(
-            model="gpt-3.5-turbo",
-            stream=True,
-            messages=[
-                {"role": "system", "content": "You are a helpful assistant."},
-                {"role": "user", "content": user_input},
-            ]
-        )
-        with st.chat_message('ai'):
-            # st.write(response.choices[0].message.content)
-            tpl = st.empty()
-            collected_messages = ''
-            for chunk in response:
-                chunk_message = chunk.choices[0].delta.content  # extract the message
-                if chunk_message:
-                    print(chunk_message, end='')
-                    collected_messages += chunk_message  # save the message
-                    tpl.write(collected_messages)
+    # with st.spinner('Thinking...'):
+    #     # openai sdk
+    #     response = client.chat.completions.create(
+    #         model="gpt-3.5-turbo",
+    #         stream=True,
+    #         messages=[
+    #             {"role": "system", "content": "You are a helpful assistant."},
+    #             {"role": "user", "content": user_input},
+    #         ]
+    #     )
+    #     with st.chat_message('ai'):
+    #         # st.write(response.choices[0].message.content)
+    #         tpl = st.empty()
+    #         collected_messages = ''
+    #         for chunk in response:
+    #             chunk_message = chunk.choices[0].delta.content  # extract the message
+    #             if chunk_message:
+    #                 print(chunk_message, end='')
+    #                 collected_messages += chunk_message  # save the message
+    #                 tpl.write(collected_messages)
 
-        # st.session_state.conversation.append(dialog.Message(
-        #     role = dialog.Role.ai.name,
-        #     name = 'ai', 
-        #     content = response.choices[0].text, 
-        #     task = dialog.Task.ChatGPT.name, 
-        #     time = datetime.now(),
-        # ))
-        # dialog.update_conversation(st.session_state.name, st.session_state.selected_title, st.session_state.conversation[-1])
+    ## API
+    queue = deque()
+    task = model.Task.ChatGPT.value
+    data = {
+        'messages': [
+            {"role": "system", "content": "You are a helpful assistant."},
+            {"role": "user", "content": user_input},
+        ],
+        'stream': True,
+        'model': "gpt-3.5-turbo",
+        'url': openai.task_params[task]['url']
+    }
+    header = {'Authorization': f"Bearer {st.secrets['openai-key']}"}
+    t = Thread(target=openai.get_response, args=(task, data, header, queue))
+    t.start()
+    with st.chat_message('ai'):
+        collected_messages = ''
+        tpl = st.empty()
+        while not collected_messages.__contains__(model.FINISH_TOKEN):
+            print(len(queue))
+            while len(queue):
+                content = queue.popleft()
+                if isinstance(content, str):
+                    collected_messages += content
+                elif isinstance(content, dict):
+                    collected_messages += str(content)
+            tpl.write(collected_messages)
+            time.sleep(0.1)
+                
+        
