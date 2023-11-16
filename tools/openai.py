@@ -55,7 +55,6 @@ def chat_stream(conversation:list, task:str, attachment=None, guest=True, tools=
         'url': url,
         'model': model,
         'file': attachment,
-        'stream': True,
     }
     
     header = {

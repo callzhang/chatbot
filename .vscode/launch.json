@@ -20,7 +20,7 @@
             "justMyCode": true,
             "args": [
                 "run",
-                "chatbot.py",
+                "home.py",
                 "--server.port",
                 "9044"
             ],
