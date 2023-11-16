@@ -2,13 +2,14 @@
 
 from retry import retry
 import requests, json, re, logging
-import threading
+import threading, multiprocessing
 from collections import deque
 import streamlit as st
 from . import dialog, auth, model, apify, utils
 from openai import OpenAI
 
-DEBUG = st.secrets.get('debug', False)
+DEBUG = st.secrets.debug
+STREAMING = st.secrets.streaming
 client = OpenAI(api_key=st.secrets["openai-key"], timeout=30)
 
 # 参数
@@ -50,7 +51,7 @@ def chat_stream(conversation:list, task:str, attachment=None, guest=True, tools=
     model = task_params[task]['model']
     data = {
         'messages': chat_history,
-        'stream': True,
+        'stream': STREAMING,
         'temperature': temperature,
         'url': url,
         'model': model,
@@ -61,9 +62,8 @@ def chat_stream(conversation:list, task:str, attachment=None, guest=True, tools=
         'Authorization': f'Bearer {auth.get_openai_key(task)}'
     }
     if DEBUG:
-        queue.append('⏳chat streaming starting \n\n')
+        queue.append('⏳chat streaming thread starting \n\n')
     thread = threading.Thread(target=get_response, args=(task, data, header, queue))
-    thread.daemon = True
     thread.start()
     return queue
     
@@ -87,9 +87,9 @@ def get_response(task, data, header, queue=None):
         fobject = {'file': (file.name, file)}
         # header['Content-Type'] = 'multipart/form-data' # The issue is that the Content-Type header in your request is missing the boundary parameter, which is crucial for the server to parse the multipart form data correctly. The requests library in Python should add this parameter automatically when you pass data through the files parameter. It seems like the Content-Type header is being set manually somewhere which is overriding the automatically set header by requests. Make sure that you are not setting the Content-Type header manually anywhere in your code or in any middleware that might be modifying the request.
         response = requests.post(url, headers=header, data=data2, files=fobject, stream=stream, timeout=300)
+    if DEBUG:
+        queue.append('⏳receiving response in another thread \n\n')
     if stream and queue is not None and response.ok:
-        if DEBUG:
-            queue.append('⏳receiving response \n\n')
         tool_results = []
         for line in response.iter_lines():
             if not line:
@@ -130,9 +130,13 @@ def get_response(task, data, header, queue=None):
     elif not stream and response.ok:
         message = response.json()['choices'][0]['message']
         chat_content = message.get('content')
-        tool_calls = [call['function'] for call in message.get('tool_calls')]
+        function_calls = message.get('tool_calls')
+        tool_calls = [call['function'] for call in function_calls] if function_calls else None
         not chat_content or print('message:', chat_content)
         not tool_calls or print('tool_calls:', tool_calls)
+        if queue:
+            queue.append(chat_content)
+            queue.append(model.FINISH_TOKEN)
         return {
             'content': chat_content,
             model.TOOL_RESULT: tool_calls,

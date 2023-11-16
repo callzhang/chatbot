@@ -52,11 +52,10 @@ st.session_state.name = 'Derek'
 st.session_state.guest = False
 st.session_state.task = model.Task.ChatGPT.value
 dialog.init_dialog('Derek')
-
-with st.chat_message('ai'):
-    st.write('你好，我是你的助理，有什么可以帮忙的？')
     
 ## SDK: success
+# with st.chat_message('ai'):
+#     st.write('你好，我是你的助理，有什么可以帮忙的？')
 # with user_input:= st.chat_input('请输入问题'):
 #     with st.chat_message('human'):
 #         st.write(user_input)
@@ -83,8 +82,6 @@ with st.chat_message('ai'):
 
 
 st.chat_input('请输入问题', on_submit=controller.gen_response, key='input_text')
-    ## API
-    # queue = deque()
 
 for message in st.session_state.conversation:
     if message.role == model.Role.user.name:
@@ -104,9 +101,10 @@ for message in st.session_state.conversation:
                             message.queue = None
                     elif isinstance(content, dict):
                         collected_messages += str(content)
-                tpl.write(collected_messages)
                 if message.time > (datetime.now() + timedelta(seconds=30)):
                     collected_messages += '超时了，我也不知道怎么回答了'
+                    message.queue = None
+                tpl.write(collected_messages)
                 time.sleep(0.1)
             else:
                 st.write(message.content)

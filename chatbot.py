@@ -119,6 +119,8 @@ for i, message in enumerate(st.session_state.conversation):
                                 status_container = status_placeholder.status('正在检索', expanded=True)
                             status_container.write(v)
                             message.status.append(v)
+                    else:
+                        raise Exception(f'Unknown content type: {type(content)}')
                 # 超时
                 if (datetime.now() - message.time).total_seconds() > model.TIMEOUT:
                     message.content += '\n\n请求超时，请重试...'
@@ -208,24 +210,22 @@ else:
 
 # 输入框
 label = None
-if task in Task.values():
-    max_chars = controller.task_params[task][task]['max_tokens']
-    if task in Task.ASR.value:
-        label = '🎤上传语音文件'
-        filetypes = controller.asr_media_types
-    elif task == Task.GPT4V.value:
-        label = '🎨上传图片'
-        filetypes = controller.gpt_media_types
-    prompt = st.chat_input(placeholder=help,
+max_chars = controller.task_params[task][task]['max_tokens']
+if task in Task.ASR.value:
+    label = '🎤上传语音文件'
+    filetypes = controller.asr_media_types
+elif task == Task.GPT4V.value:
+    label = '🎨上传图片'
+    filetypes = controller.gpt_media_types
+if label:
+    attachment = st.file_uploader(label, type=filetypes, key='attachment', disabled=disabled)
+# input
+prompt = st.chat_input(placeholder=help,
                     key='input_text', 
                     disabled=disabled,
                     max_chars = max_chars,
                     on_submit = controller.gen_response
                 )
-    if label:
-        attachment = st.file_uploader(label, type=filetypes, key='attachment', disabled=disabled)
-else:
-    raise NotImplementedError(task)
 
 ## 聊天历史功能区
 c1, c2, c3, c4 = st.sidebar.columns(4)

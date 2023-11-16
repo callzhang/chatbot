@@ -62,14 +62,14 @@ def gen_response(query=None):
                                     attachment=attachment,
                                     guest=st.session_state.guest)
         if openai.DEBUG:
-            queue.append('debug: chat_stream returned\n\n')
+            queue.append('controller: queue returned\n\n')
         bot_response = Message(
             role= Role.assistant.name,
             content = '', 
             queue = queue,
             time = datetime.now(),
             task = model.Task(task).name,
-            name = task,
+            name = task_params[task][task]['model'],
         )
         st.session_state.conversation.append(bot_response)
     elif task == Task.ChatSearch.value:
@@ -81,7 +81,7 @@ def gen_response(query=None):
             queue = queue,
             time = datetime.now(),
             task = model.Task(task).name,
-            name = task,
+            name = task_params[task][task]['model'],
         )
         st.session_state.conversation.append(bot_response)
     elif task == Task.BingAI.value:
@@ -96,7 +96,7 @@ def gen_response(query=None):
             queue = queue, 
             thread = thread,
             time = datetime.now(),
-            name = task
+            name = task_params[task][task]['model'],
         )
         st.session_state.conversation.append(bot_response)
     elif task == Task.text2img.value:
@@ -107,7 +107,7 @@ def gen_response(query=None):
                 role= Role.assistant.name,
                 content = None ,
                 task = model.Task(task),
-                name = 'DALL·E',
+                name = task_params[task][task]['model'],
                 time = datetime.now(),
                 medias = urls
             )
@@ -122,7 +122,7 @@ def gen_response(query=None):
                 role= Role.assistant.name,
                 content = transcription,
                 task = model.Task(task),
-                name = 'Whisper',
+                name = task_params[task][task]['model'],
                 time = datetime.now()
             )
             st.session_state.conversation.append(bot_response)
