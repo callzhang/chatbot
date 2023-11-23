@@ -101,6 +101,9 @@ def google_search(query):
         for result in peopleAlsoAsk:
             parsed_results.append({k:v for k, v in result.items() if k in ['answer', 'question', 'url', 'title']})
             also_asks = [a['question'] for a in peopleAlsoAsk]
+        
+        # filter out no url
+        parsed_results = [r for r in parsed_results if 'url' in r]
         return parsed_results, also_asks
     
 @retry(tries=3)

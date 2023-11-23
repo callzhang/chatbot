@@ -78,69 +78,27 @@ if st.session_state.guest:
 # 显示对话内容
 for i, message in enumerate(st.session_state.conversation):
     role, content, medias =  message.role, message.content, message.medias
-    if role == 'system':
+    if role == Role.system.name:
         pass
-    elif role == 'server':# not implemented
-        with st.chat_message('server'):
+    elif role == Role.server.name:# not implemented
+        with st.chat_message(role):
             st.markdown(content)
-    elif role == "user":
+    elif role == Role.user.name:
         if content or medias:
-            with st.chat_message('user'):
+            with st.chat_message(role):
                 if medias:
                     for media in medias:
                         controller.display_media(media)
                 if content:
                     st.markdown(content)
-    elif role == "assistant":
+    elif role == Role.assistant.name:
         with st.chat_message('assistant'):
-            status_placeholder = st.empty()
-            status_container = None
-            msg_placeholder = st.empty()
-            while (queue := message.queue) is not None: # streaming
-                while len(queue) > 0:
-                    content = queue.popleft()
-                    message.time = datetime.now()
-                    if isinstance(content, str):
-                        if content == model.FINISH_TOKEN:
-                            controller.finish_reply(message)
-                            break
-                        message.content += content
-                    elif isinstance(content, dict): # network error
-                        if v := content.get(model.SERVER_ERROR):
-                            message.content += f'\n\n{v}'
-                            message.actions = {'重试': model.RETRY_TOKEN}
-                            controller.finish_reply(message)
-                        elif v:= content.get(model.TOOL_RESULT):
-                            # message.content += f'```{json.dumps(v, indent=2, ensure_ascii=False)}```'
-                            message.functions = f'```v```'
-                            # controller.finish_reply(message)
-                        elif v:= content.get(model.STATUS):
-                            if not status_container: #init
-                                status_container = status_placeholder.status('正在检索', expanded=True)
-                            status_container.write(v)
-                            message.status.append(v)
-                    else:
-                        raise Exception(f'Unknown content type: {type(content)}')
-                # 超时
-                if (datetime.now() - message.time).total_seconds() > model.TIMEOUT:
-                    message.content += '\n\n请求超时，请重试...'
-                    message.actions = {'重试': model.RETRY_TOKEN}
-                    controller.finish_reply(message)
-                    break
-                # 渲染
-                content_full = message.content.replace(model.SUGGESTION_TOKEN, '')
-                msg_placeholder.markdown(content_full + "▌")
-                time.sleep(0.1)
-            
             # status
             if message.status:
-                if not status_container:
-                    with status_placeholder.status('正在检索') as status:
-                        for s in message.status:
-                            status.write(s)
-                        status.update(label='检索完成', state="complete", expanded=False)
-                else:
-                    status_container.update(label='检索完成', state="complete", expanded=False)
+                with st.status('正在检索') as status:
+                    for s in message.status:
+                        status.write(s)
+                    status.update(label='检索完成', state="complete", expanded=False)
             # 显示完整内容
             content = message.content
             suggestions = message.suggestions
@@ -150,14 +108,14 @@ for i, message in enumerate(st.session_state.conversation):
                     for media in medias:
                         controller.display_media(media)
                 if content:
-                    msg_placeholder.markdown(content)
+                    st.markdown(content)
             # suggestion
             if content and model.SUGGESTION_TOKEN in content:
                 content, suggestions = controller.parse_suggestions(content)
                 message.suggestions = suggestions
                 # update content
                 message.content = content
-                msg_placeholder.markdown(content)
+                st.markdown(content)
             if suggestions and i == len(st.session_state.conversation) -1:
                 suggestions = set(suggestions)
                 cols = st.columns(len(suggestions))
@@ -220,12 +178,17 @@ elif task == Task.GPT4V.value:
 if label:
     attachment = st.file_uploader(label, type=filetypes, key='attachment', disabled=disabled)
 # input
-prompt = st.chat_input(placeholder=help,
+user_input = st.chat_input(placeholder=help,
                     key='input_text', 
                     disabled=disabled,
                     max_chars = max_chars,
-                    on_submit = controller.gen_response
+                    # on_submit = controller.gen_response
                 )
+if user_input:
+    query_message, bot_message = controller.gen_response(user_input)
+    with st.chat_message(model.Role.user.name):
+        st.markdown(query_message.content)
+    controller.show_streaming_message(bot_message)
 
 ## 聊天历史功能区
 c1, c2, c3, c4 = st.sidebar.columns(4)

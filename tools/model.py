@@ -1,6 +1,7 @@
 
 from enum import Enum, unique
-from collections import deque
+# from collections import deque
+from queue import Queue
 from datetime import datetime
 from streamlit.runtime.uploaded_file_manager import UploadedFile, UploadedFileRec
 from io import BytesIO
@@ -77,7 +78,7 @@ class AppMessage(BaseModel):
     time: datetime # time created
     task: str | None # task type using Task, None for system message
     name: str # user name or model name
-    queue: deque | None = None # used to get streaming message from another thread
+    queue: Queue | None = None # used to get streaming message from another thread
     suggestions: list[str] | None = None # suggestions for user to choose
     actions: dict[str, str] | None = None # actions for user to choose
     medias: list[UploadedFile] | None = None # media files kept in bytes, e.g. images, audio, video

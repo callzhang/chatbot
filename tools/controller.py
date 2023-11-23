@@ -3,7 +3,7 @@ from tools import model, utils
 from datetime import datetime
 from . import dialog, openai, bing, imagegen, asr
 import logging
-import re, ast
+import re, ast, time
 
 Task = model.Task
 Role = model.Role
@@ -23,8 +23,56 @@ task_params = {
     model.Task.BingAI.value: bing.task_params,
 }
 
+## display assistant message
+def show_streaming_message(message: Message):
+    role, content, medias =  message.role, message.content, message.medias
+    assert role == Role.assistant.name, f'Wrong message role: {message.role}'
+    with st.chat_message(role):
+        status_placeholder = st.empty()
+        status_container = None
+        msg_placeholder = st.empty()
+        while (queue := message.queue) is not None: # streaming
+            while queue.qsize() > 0:
+                content = queue.get()
+                message.time = datetime.now()
+                if isinstance(content, str):
+                    if content == model.FINISH_TOKEN:
+                        finish_reply(message)
+                        break
+                    message.content += content
+                elif isinstance(content, dict): # network error
+                    if v := content.get(model.SERVER_ERROR):
+                        message.content += f'\n\n{v}'
+                        message.actions = {'重试': model.RETRY_TOKEN}
+                        finish_reply(message)
+                    elif v:= content.get(model.TOOL_RESULT):
+                        # message.content += f'```{json.dumps(v, indent=2, ensure_ascii=False)}```'
+                        message.functions = f'```v```'
+                        # finish_reply(message)
+                    elif v:= content.get(model.STATUS):
+                        if not status_container: #init
+                            status_container = status_placeholder.status('正在检索', expanded=True)
+                        status_container.write(v)
+                        message.status.append(v)
+                else:
+                    raise Exception(f'Unknown content type: {type(content)}')
+            # 超时
+            if (datetime.now() - message.time).total_seconds() > model.TIMEOUT:
+                message.content += '\n\n请求超时，请重试...'
+                message.actions = {'重试': model.RETRY_TOKEN}
+                finish_reply(message)
+                break
+            # 渲染
+            content_full = message.content.replace(model.SUGGESTION_TOKEN, '')
+            msg_placeholder.markdown(content_full + "▌")
+            time.sleep(0.1)
+        
+        # status
+        if status_container:
+            status_container.update(label='检索完成', state="complete", expanded=False)
+    st.rerun()
 
-# 对输入进行应答
+## 对输入进行应答
 def gen_response(query=None):
     task = st.session_state.task
     assert task in Task.values(), NotImplementedError(task)
@@ -129,6 +177,8 @@ def gen_response(query=None):
             finish_reply(bot_response)
     else:
         raise NotImplementedError(task)
+    
+    return query_message, bot_response
 
 
 def handle_action(action_token):

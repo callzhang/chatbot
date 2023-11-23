@@ -3,7 +3,8 @@
 from retry import retry
 import requests, json, re, logging
 import threading, multiprocessing
-from collections import deque
+# from collections import deque
+from queue import Queue
 import streamlit as st
 from . import dialog, auth, model, apify, utils
 from openai import OpenAI
@@ -45,7 +46,7 @@ accepted_attachment_types = ['png', 'jpg', 'jpeg']
 ## ------------receiving streaming server-sent events（异步）------------
 def chat_stream(conversation:list, task:str, attachment=None, guest=True, tools=None):
     chat_history = conversation2history(conversation, guest, task)
-    queue = deque()
+    queue = Queue()
     # create a queue to store the responses
     url = task_params[task]['url']
     model = task_params[task]['model']
@@ -62,7 +63,7 @@ def chat_stream(conversation:list, task:str, attachment=None, guest=True, tools=
         'Authorization': f'Bearer {auth.get_openai_key(task)}'
     }
     if DEBUG:
-        queue.append('⏳chat streaming thread starting \n\n')
+        queue.put('⏳chat streaming thread starting \n\n')
     thread = threading.Thread(target=get_response, args=(task, data, header, queue))
     thread.start()
     return queue
@@ -87,8 +88,8 @@ def get_response(task, data, header, queue=None):
         fobject = {'file': (file.name, file)}
         # header['Content-Type'] = 'multipart/form-data' # The issue is that the Content-Type header in your request is missing the boundary parameter, which is crucial for the server to parse the multipart form data correctly. The requests library in Python should add this parameter automatically when you pass data through the files parameter. It seems like the Content-Type header is being set manually somewhere which is overriding the automatically set header by requests. Make sure that you are not setting the Content-Type header manually anywhere in your code or in any middleware that might be modifying the request.
         response = requests.post(url, headers=header, data=data2, files=fobject, stream=stream, timeout=300)
-    if DEBUG:
-        queue.append('⏳receiving response in another thread \n\n')
+    if DEBUG and queue:
+        queue.put('⏳receiving response in another thread \n\n')
     if stream and queue is not None and response.ok:
         tool_results = []
         for line in response.iter_lines():
@@ -103,7 +104,7 @@ def get_response(task, data, header, queue=None):
                         print('tool_results: ', tool_results)
                         return {model.TOOL_RESULT: tool_results}
                     else:
-                        queue.append(model.FINISH_TOKEN)
+                        queue.put(model.FINISH_TOKEN)
                         print('\n'+'-'*60)
                         return
                 # unpack
@@ -112,7 +113,7 @@ def get_response(task, data, header, queue=None):
                     content = value['choices'][0]['delta'].get('content')
                     tool_calls = value['choices'][0]['delta'].get('tool_calls')
                     if content:
-                        queue.append(content)
+                        queue.put(content)
                         print(content, end='')
                     if tool_calls:
                         for call in tool_calls:
@@ -135,8 +136,8 @@ def get_response(task, data, header, queue=None):
         not chat_content or print('message:', chat_content)
         not tool_calls or print('tool_calls:', tool_calls)
         if queue:
-            queue.append(chat_content)
-            queue.append(model.FINISH_TOKEN)
+            queue.put(chat_content)
+            queue.put(model.FINISH_TOKEN)
         return {
             'content': chat_content,
             model.TOOL_RESULT: tool_calls,
@@ -145,7 +146,7 @@ def get_response(task, data, header, queue=None):
         estring = f'出错啦，请重试: {response.status_code}, {response.text}'
         logging.error(estring)
         logging.error(json.dumps(data, indent=2, ensure_ascii=False))
-        queue.append({model.SERVER_ERROR: estring})
+        queue.put({model.SERVER_ERROR: estring})
         return
     
 
@@ -163,25 +164,25 @@ def chat_with_search(conversation:list, task:str):
     header = {
         'Authorization': f'Bearer {auth.get_openai_key(task)}'
     }
-    queue_UI = deque()
+    queue_UI = Queue()
     thread = threading.Thread(target=chat_with_search_actor, args=(task, data, header, queue_UI))
     # thread.daemon = True
     thread.start()
     return queue_UI
     
-def chat_with_search_actor(task, data, header, queue_UI:deque):
+def chat_with_search_actor(task, data, header, queue_UI):
     '''the thread runner for chat_with_search'''
     result = get_response(task, data, header, queue_UI)
     
     # web search
     if not result or not (tool_results := result[model.TOOL_RESULT]):
-        queue_UI.append(model.FINISH_TOKEN)
+        queue_UI.put(model.FINISH_TOKEN)
         return
     search_results, also_asks = [], []
     for name, func, kargs in get_function_calls(tool_results):
         assert name == 'google_search'
         message = f'🔍正在检索: {kargs["query"]}'
-        queue_UI.append({model.STATUS: message})
+        queue_UI.put({model.STATUS: message})
         search_result, also_ask = func(**kargs)
         # print(f'🔍search result: \n\n{json.dumps(search_result, indent=2, ensure_ascii=False)}')
         search_results += search_result
@@ -189,7 +190,7 @@ def chat_with_search_actor(task, data, header, queue_UI:deque):
     search_result_content = [f"[{r['title']}]({r['url']})" for r in search_results]
     search_result_content = '\n'.join(search_result_content)
     logging.info(search_result_content)
-    # queue_UI.append(search_result_content)
+    # queue_UI.put(search_result_content)
     
     # let the GPT do the decision, then parse the web content
     for chat in data['messages']:
@@ -199,7 +200,7 @@ def chat_with_search_actor(task, data, header, queue_UI:deque):
     # streaming the result using regular chat_stream
     answer_question_with_search_result(task, question, also_asks, web_content, queue_UI)
     # finish
-    queue_UI.append(model.FINISH_TOKEN)
+    queue_UI.put(model.FINISH_TOKEN)
 
         
 def get_search_content(task, question, search_result, queue_UI):
@@ -221,7 +222,7 @@ def get_search_content(task, question, search_result, queue_UI):
     header = {
         'Authorization': f'Bearer {auth.get_openai_key(task)}'
     }
-    queue_UI.append({model.STATUS: '⏳正在思考'})
+    queue_UI.put({model.STATUS: '⏳正在思考'})
     result = get_response(task, data, header)
     tool_results = result[model.TOOL_RESULT]
     web_contents = []
@@ -229,11 +230,11 @@ def get_search_content(task, question, search_result, queue_UI):
         assert name == 'parse_web_content'
         URL = kargs["url"]
         title = [r['title'] for r in search_result if r['url']==URL][0]
-        queue_UI.append({model.STATUS: f'⏳正在阅读: [{title}]({URL})'})
+        queue_UI.put({model.STATUS: f'⏳正在阅读: [{title}]({URL})'})
         # 浏览信息
         web_content = func(**kargs)
         if not web_content:
-            queue_UI.append({model.STATUS: f'❌无法访问: [{title}]({URL})'})
+            queue_UI.put({model.STATUS: f'❌无法访问: [{title}]({URL})'})
         else:
             print(f'🔍Ingested web content: {title} with {utils.token_size(web_content)} tokens')
             web_content = utils.truncate_text(web_content, task_params[task]['max_web_content'])
@@ -335,5 +336,5 @@ if __name__ == '__main__':
             time = None
         )
     ]
-    queue = deque()
+    queue = Queue()
     chat_with_search(chat_history, task=model.Task.ChatSearch.value, queue_UI=queue)
