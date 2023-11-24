@@ -110,7 +110,7 @@ def gen_response(query=None):
                                     attachment=attachment,
                                     guest=st.session_state.guest)
         if openai.DEBUG:
-            queue.append('controller: queue returned\n\n')
+            queue.put('controller: queue returned\n\n')
         bot_response = Message(
             role= Role.assistant.name,
             content = '', 
