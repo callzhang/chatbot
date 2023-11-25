@@ -1,10 +1,11 @@
-import html2text
+from html2text import HTML2Text
 from bs4 import BeautifulSoup
 import requests
 from pprint import pprint
 from apify_client import ApifyClient
 from . import auth
 from retry import retry
+from newspaper import Article
 
 apify_token = auth.get_apify_token()
 
@@ -107,27 +108,47 @@ def google_search(query):
         return parsed_results, also_asks
     
 @retry(tries=3)
-def parse_web_content(url):
+def parse_web_content(url, safe=False):
     """
     This function converts HTML content to a readable format
     """
     print(f'parsing web content: {url}')
-    try:
-        response = requests.get(url, timeout=30)
-    except:
-        return
-    html_content = response.text
-    # Use BeautifulSoup to parse the HTML
-    soup = BeautifulSoup(html_content, 'html.parser')
-    
+    if safe:
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.5',
+            'DNT': '1',  # Do Not Track Request Header
+            'Connection': 'keep-alive',
+            'Upgrade-Insecure-Requests': '1',
+            'Cache-Control': 'max-age=0',
+        }
+        response = requests.get(url, timeout=30, headers=headers)
+        # Use BeautifulSoup to parse the HTML
+        soup = BeautifulSoup(response.text, 'html.parser')
+        html = soup.prettify()
+    else:
+        # use newspaper for better parsing
+        article = Article(url)
+        try:
+            article.download()
+        except:
+            return parse_web_content(url, safe=True)
+        html = article.html
+        if len(html) < 100:
+            return parse_web_content(url, safe=True)
+        
     # Use html2text to convert the parsed HTML to plain text
-    text_maker = html2text.HTML2Text()
-    text_maker.ignore_links = False
-    text_maker.bypass_tables = False
-    text_maker.ignore_images = True
-    text_maker.ignore_emphasis = False
-    readable_text = text_maker.handle(soup.prettify())
+    html2md = HTML2Text()
+    html2md.ignore_links = True
+    html2md.bypass_tables = False
+    html2md.ignore_images = True
+    html2md.ignore_emphasis = False
+    readable_text = html2md.handle(html)
     
+    # safe
+    if not safe and len(readable_text) < 100:
+        return parse_web_content(url, safe=True)
     return readable_text
 
 #------------tools list-------------

@@ -45,14 +45,15 @@ def show_streaming_message(message: Message, message_placeholder):
                         message.content += f'\n\n{v}'
                         message.actions = {'重试': model.RETRY_TOKEN}
                         finish_reply(message)
-                    elif v := char.get(model.TOOL_RESULT):
+                    elif functions := char.get(model.TOOL_RESULT):
                         # message.content += f'```{json.dumps(v, indent=2, ensure_ascii=False)}```'
-                        message.functions = f'```v```'
+                        message.functions += functions
                         # finish_reply(message)
                     elif v := char.get(model.STATUS):
                         if not status_container: #init
                             status_container = status_placeholder.status('正在检索', expanded=True)
-                        status_container.write(v)
+                        help = char.get(model.HELP)
+                        status_container.markdown(v, help=help)
                         message.status.append(v)
                 else:
                     raise Exception(f'Unknown content type: {type(content)}')
@@ -97,7 +98,7 @@ def show_streaming_message(message: Message, message_placeholder):
     if content:
         text_placeholder.markdown(content)
     # actions: only "retry" is supported
-    if actions := message.actions and i == len(st.session_state.conversation) - 1:
+    if (actions := message.actions) and i == len(st.session_state.conversation) - 1:
         for action, token in actions.items():
             message_placeholder.button(action, on_click=handle_action, args=(token,))
 

@@ -16,11 +16,12 @@ SUGGESTION_TOKEN = '[SUGGESTION]'
 FINISH_TOKEN = '[DONE]'
 RETRY_TOKEN = '[RETRY]'
 ACTIONS = [RETRY_TOKEN]
-TIMEOUT = 30
+TIMEOUT = 60
 LOGIN_CODE = 'login_code'
 SERVER_ERROR = '[SERVER_ERROR]'
 TOOL_RESULT = '[TOOL_RESULT]'
 STATUS = '[STATUS]'
+HELP = '[HELP]'
 
 @unique
 class Task(Enum):
@@ -82,7 +83,7 @@ class AppMessage(BaseModel):
     suggestions: list[str] | None = None # suggestions for user to choose
     actions: dict[str, str] | None = None # actions for user to choose
     medias: list[UploadedFile] | None = None # media files kept in bytes, e.g. images, audio, video
-    functions: list[dict] | None = None # functions to be executed, e.g. google search
+    functions: list[dict] = [] # functions to be executed, e.g. google search
     
     @validator('role', pre=True, always=True)
     def set_role(role:str):
