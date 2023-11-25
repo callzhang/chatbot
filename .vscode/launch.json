@@ -5,6 +5,22 @@
     "version": "0.2.0",
     "configurations": [
         {
+            "name": "Python: Module",
+            "type": "python",
+            "request": "launch",
+            "module": "tools.controller",
+            "justMyCode": true
+        },
+        {
+            "name": "test",
+            "type": "python",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "cwd": "${workspaceFolder}"
+        },
+        {
             "name": "Gradio",
             "type": "python",
             "request": "launch",
@@ -24,7 +40,9 @@
                 "--server.port",
                 "9044"
             ],
-            "env": {"DEBUG": "true"}
+            "env": {
+                "DEBUG": "true"
+            }
         }
     ]
 }

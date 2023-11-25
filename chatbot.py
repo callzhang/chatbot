@@ -75,72 +75,6 @@ st.session_state.selected_title = st.sidebar.radio('聊天历史',
 if st.session_state.guest:
     st.info('访客模式：支持最大10轮对话和20轮聊天历史')
 
-# 显示对话内容
-for i, message in enumerate(st.session_state.conversation):
-    role, content, medias =  message.role, message.content, message.medias
-    if role == Role.system.name:
-        pass
-    elif role == Role.server.name:# not implemented
-        with st.chat_message(role):
-            st.markdown(content)
-    elif role == Role.user.name:
-        if content or medias:
-            with st.chat_message(role):
-                if medias:
-                    for media in medias:
-                        controller.display_media(media)
-                if content:
-                    st.markdown(content)
-    elif role == Role.assistant.name:
-        with st.chat_message('assistant'):
-            # status
-            if message.status:
-                with st.status('正在检索') as status:
-                    for s in message.status:
-                        status.write(s)
-                    status.update(label='检索完成', state="complete", expanded=False)
-            # 显示完整内容
-            content = message.content
-            suggestions = message.suggestions
-            # media and content
-            if content or medias:
-                if medias:
-                    for media in medias:
-                        controller.display_media(media)
-                if content:
-                    st.markdown(content)
-            # suggestion
-            if content and model.SUGGESTION_TOKEN in content:
-                content, suggestions = controller.parse_suggestions(content)
-                message.suggestions = suggestions
-                # update content
-                message.content = content
-                st.markdown(content)
-            if suggestions and i == len(st.session_state.conversation) -1:
-                suggestions = set(suggestions)
-                cols = st.columns(len(suggestions))
-                for col, suggestion in zip(cols, suggestions):
-                    with col:
-                        st.button('👉🏻'+suggestion[:50], help=suggestion,
-                                    on_click=controller.gen_response, kwargs={'query': suggestion})
-            
-            # actions: only "retry" is supported
-            actions= message.actions
-            if actions and i == len(st.session_state.conversation) -1:
-                if type(actions) is str:
-                    actions = eval(actions)
-                for action, token in actions.items():
-                    st.button(action, on_click=controller.handle_action, args=(token,))
-    else:
-        raise Exception(f'Unknown role: {role}')
-        with st.chat_message('error'):
-            st.markdown(str(message))
-
-    # page layout
-    if st.session_state.desired_layout != 'wide' and message.role=='assistant' and utils.token_size(message.content) > WIDE_LAYOUT_THRESHOLD:
-        st.session_state.desired_layout = 'wide'
-        st.rerun()
-
 # 添加文本输入框
 if st.session_state.guest and len(st.session_state.conversation) > 10:
     disabled, help = True, '访客不支持长对话，请联系管理员'
@@ -176,19 +110,44 @@ elif task == Task.GPT4V.value:
     label = '🎨上传图片'
     filetypes = controller.gpt_media_types
 if label:
-    attachment = st.file_uploader(label, type=filetypes, key='attachment', disabled=disabled)
+    attachment = st.file_uploader(
+        label, type=filetypes, key='attachment', disabled=disabled)
 # input
 user_input = st.chat_input(placeholder=help,
-                    key='input_text', 
-                    disabled=disabled,
-                    max_chars = max_chars,
-                    # on_submit = controller.gen_response
-                )
-if user_input:
-    query_message, bot_message = controller.gen_response(user_input)
-    with st.chat_message(model.Role.user.name):
-        st.markdown(query_message.content)
-    controller.show_streaming_message(bot_message)
+                           key='input_text',
+                           disabled=disabled,
+                           max_chars=max_chars,
+                           on_submit=controller.gen_response
+                           )
+# 显示对话内容
+for i, message in enumerate(st.session_state.conversation):
+    role, content, medias =  message.role, message.content, message.medias
+    if role == Role.system.name:
+        pass
+    elif role == Role.server.name:# not implemented
+        with st.chat_message(role):
+            st.markdown(content)
+    elif role == Role.user.name:
+        if content or medias:
+            with st.chat_message(role):
+                if medias:
+                    for media in medias:
+                        controller.display_media(media)
+                if content:
+                    st.markdown(content)
+    elif role == Role.assistant.name:
+        message_placeholder =  st.chat_message(role)
+        controller.show_streaming_message(message, message_placeholder)
+    else:
+        raise Exception(f'Unknown role: {role}')
+        with st.chat_message('error'):
+            st.markdown(str(message))
+
+    # page layout
+    if st.session_state.desired_layout != 'wide' and message.role=='assistant' and utils.token_size(message.content) > WIDE_LAYOUT_THRESHOLD:
+        st.session_state.desired_layout = 'wide'
+        st.rerun()
+
 
 ## 聊天历史功能区
 c1, c2, c3, c4 = st.sidebar.columns(4)

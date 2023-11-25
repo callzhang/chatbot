@@ -164,25 +164,26 @@ def chat_with_search(conversation:list, task:str):
     header = {
         'Authorization': f'Bearer {auth.get_openai_key(task)}'
     }
-    queue_UI = Queue()
-    thread = threading.Thread(target=chat_with_search_actor, args=(task, data, header, queue_UI))
+    queue = Queue()
+    thread = threading.Thread(target=chat_with_search_actor, args=(task, data, header, queue))
     # thread.daemon = True
     thread.start()
-    return queue_UI
+    return queue
     
-def chat_with_search_actor(task, data, header, queue_UI):
+def chat_with_search_actor(task, data, header, queue):
     '''the thread runner for chat_with_search'''
-    result = get_response(task, data, header, queue_UI)
+    result = get_response(task, data, header, queue)
     
     # web search
     if not result or not (tool_results := result[model.TOOL_RESULT]):
-        queue_UI.put(model.FINISH_TOKEN)
+        queue.put(model.FINISH_TOKEN)
+        utils.logger.info(f'No function returned for "{data["messages"][-3]["content"]}"')
         return
     search_results, also_asks = [], []
     for name, func, kargs in get_function_calls(tool_results):
         assert name == 'google_search'
         message = f'🔍正在检索: {kargs["query"]}'
-        queue_UI.put({model.STATUS: message})
+        queue.put({model.STATUS: message})
         search_result, also_ask = func(**kargs)
         # print(f'🔍search result: \n\n{json.dumps(search_result, indent=2, ensure_ascii=False)}')
         search_results += search_result
@@ -196,11 +197,11 @@ def chat_with_search_actor(task, data, header, queue_UI):
     for chat in data['messages']:
         if chat['role'] == model.Role.user.name:
             question = chat['content']
-    web_content = get_search_content(task, question, search_results, queue_UI)
+    web_content = get_search_content(task, question, search_results, queue)
     # streaming the result using regular chat_stream
-    answer_question_with_search_result(task, question, also_asks, web_content, queue_UI)
+    answer_question_with_search_result(task, question, also_asks, web_content, queue)
     # finish
-    queue_UI.put(model.FINISH_TOKEN)
+    queue.put(model.FINISH_TOKEN)
 
         
 def get_search_content(task, question, search_result, queue_UI):

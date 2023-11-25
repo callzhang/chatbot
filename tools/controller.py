@@ -24,32 +24,32 @@ task_params = {
 }
 
 ## display assistant message
-def show_streaming_message(message: Message):
+def show_streaming_message(message: Message, message_placeholder):
+    i = st.session_state.conversation.index(message)
     role, content, medias =  message.role, message.content, message.medias
-    assert role == Role.assistant.name, f'Wrong message role: {message.role}'
-    with st.chat_message(role):
-        status_placeholder = st.empty()
+    status_placeholder = message_placeholder.empty()
+    text_placeholder = message_placeholder.empty()
+    if message.queue is not None:
         status_container = None
-        msg_placeholder = st.empty()
-        while (queue := message.queue) is not None: # streaming
+        while (queue := message.queue) is not None:  # streaming
             while queue.qsize() > 0:
-                content = queue.get()
+                char = queue.get()
                 message.time = datetime.now()
-                if isinstance(content, str):
-                    if content == model.FINISH_TOKEN:
+                if isinstance(char, str):
+                    if char == model.FINISH_TOKEN:
                         finish_reply(message)
                         break
-                    message.content += content
-                elif isinstance(content, dict): # network error
-                    if v := content.get(model.SERVER_ERROR):
+                    message.content += char
+                elif isinstance(char, dict):  # network error
+                    if v := char.get(model.SERVER_ERROR):
                         message.content += f'\n\n{v}'
                         message.actions = {'重试': model.RETRY_TOKEN}
                         finish_reply(message)
-                    elif v:= content.get(model.TOOL_RESULT):
+                    elif v := char.get(model.TOOL_RESULT):
                         # message.content += f'```{json.dumps(v, indent=2, ensure_ascii=False)}```'
                         message.functions = f'```v```'
                         # finish_reply(message)
-                    elif v:= content.get(model.STATUS):
+                    elif v := char.get(model.STATUS):
                         if not status_container: #init
                             status_container = status_placeholder.status('正在检索', expanded=True)
                         status_container.write(v)
@@ -64,13 +64,42 @@ def show_streaming_message(message: Message):
                 break
             # 渲染
             content_full = message.content.replace(model.SUGGESTION_TOKEN, '')
-            msg_placeholder.markdown(content_full + "▌")
+            text_placeholder.markdown(content_full + "▌")
             time.sleep(0.1)
-        
-        # status
-        if status_container:
-            status_container.update(label='检索完成', state="complete", expanded=False)
-    st.rerun()
+        # remove msg and status
+        text_placeholder.empty()
+        status_placeholder.empty()
+    
+    # show non-streaming message
+    if message.status: # show status
+        with status_placeholder.status('正在检索') as status:
+            for s in message.status:
+                status.write(s)
+            status.update(label='检索完成', state="complete", expanded=False)
+
+    # media
+    content = message.content
+    suggestions = message.suggestions
+    if medias:
+        for media in medias:
+            display_media(media)
+    # suggestion
+    if content and (model.SUGGESTION_TOKEN in content or '启发性问题:' in content):
+        content, suggestions = parse_suggestions(content)
+        message.suggestions = suggestions
+        message.content = content
+    if suggestions and i == len(st.session_state.conversation) - 1:
+        suggestions = set(suggestions)
+        for suggestion in suggestions:
+            message_placeholder.button('👉🏻'+suggestion[:30], help=suggestion,
+                        on_click=gen_response, kwargs={'query': suggestion})
+    # text content
+    if content:
+        text_placeholder.markdown(content)
+    # actions: only "retry" is supported
+    if actions := message.actions and i == len(st.session_state.conversation) - 1:
+        for action, token in actions.items():
+            message_placeholder.button(action, on_click=handle_action, args=(token,))
 
 ## 对输入进行应答
 def gen_response(query=None):
@@ -230,7 +259,7 @@ def parse_suggestions(content:str):
         return None, None
     reply = content
     suggestions = []
-    if model.SUGGESTION_TOKEN in content:
+    if model.SUGGESTION_TOKEN in content or '启发性问题:' in content:
         pattern1 = r'(\[SUGGESTION\]:\s?)(\[.+\])'
         pattern2 = r'(\[SUGGESTION\]:\s?)(.{3,})'
         pattern3 = r'\[SUGGESTION\]|启发性问题:\s*'
@@ -270,4 +299,22 @@ def filter_suggestion(content:str):
 
 
 
+if __name__ == '__main__':
+    content = '''作为基于Transformer技术的AI助手，我有以下能力：
 
+1. 自然语言处理（NLP）：我可以理解和生成自然语言文本，并通过语义理解和语言生成技术来回答问题、提供信息和进行对话。
+
+2. 知识检索和推理：我可以从广泛的知识库中检索和提取信息，包括事实、定义、解释、统计数据等，并进行推理和逻辑推断。
+
+3. 问题解答和咨询：我可以回答各种AI相关的问题，包括机器学习、深度学习、计算机视觉、自然语言处理等领域，并提供咨询和建议。
+
+4. 数据标注和数据策略：作为星尘数据的AI助手，我可以帮助解答与数据标注和数据策略相关的问题，包括数据集的构建、标注质量控制、标注工具选择等方面。
+
+5. 提供相关资源和指导：如果我无法回答你的问题，我会建议你访问星尘数据的官方网站（stardust.ai），那里会有更多关于AI和数据领域的资源和指导。
+
+启发性问题:
+- 你能给我提供一些关于自然语言处理的应用领域吗？
+- 在数据标注过程中，如何确保标注质量？
+- 你能向我解释一下深度学习是如何工作的吗？'''
+    content, suggestion = parse_suggestions(content)
+    print(content)
