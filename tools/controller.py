@@ -174,6 +174,7 @@ def gen_response(query=None):
             queue = queue, 
             thread = thread,
             time = datetime.now(),
+            task = model.Task(task).name,
             name = task_params[task][task]['model'],
         )
         st.session_state.conversation.append(bot_response)
@@ -184,7 +185,7 @@ def gen_response(query=None):
             bot_response = Message(
                 role= Role.assistant.name,
                 content = None ,
-                task = model.Task(task),
+                task = model.Task(task).name,
                 name = task_params[task][task]['model'],
                 time = datetime.now(),
                 medias = urls
@@ -199,7 +200,7 @@ def gen_response(query=None):
             bot_response = Message(
                 role= Role.assistant.name,
                 content = transcription,
-                task = model.Task(task),
+                task = model.Task(task).name,
                 name = task_params[task][task]['model'],
                 time = datetime.now()
             )

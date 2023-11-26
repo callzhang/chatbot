@@ -8,7 +8,7 @@ lab_url = 'https://labs.openai.com/'
 
 task_params = {
     model.Task.text2img.value: {
-        'model': 'clip-dVAE',
+        'model': 'dall-e-3',
         'url': 'https://api.openai.com/v1/images/generations',
         'max_tokens': 4000,
     },
@@ -39,7 +39,8 @@ def gen_image(prompt):
     data = {
         "prompt": prompt,
         "n": 1,
-        "size": "1024x1024" #1024x1024
+        "model": task_params[model.Task.text2img.value]['model'],
+        "size": "1024x1024"
     }
     res = requests.post(url, headers=header, json=data).json()
     if 'error' in res:

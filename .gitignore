@@ -11,3 +11,4 @@ temp/
 # *.icloud
 chatbot.py
 log.txt
+service_account.json
