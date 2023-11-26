@@ -1,5 +1,6 @@
 from html2text import HTML2Text
 from bs4 import BeautifulSoup
+from readability import Document
 import requests
 from pprint import pprint
 from apify_client import ApifyClient
@@ -112,11 +113,11 @@ def google_search(query):
         return parsed_results, also_asks
     
 @retry(tries=3)
-def parse_web_content(url, title=None, safe=False):
+def parse_web_content(url, title=None):
     """
     This function converts HTML content to a readable format
     """
-    print(f'parsing web content: {url}')
+    print(f'--> using newspaper parsing web content: {url}')
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36',
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
@@ -126,37 +127,41 @@ def parse_web_content(url, title=None, safe=False):
         'Upgrade-Insecure-Requests': '1',
         'Cache-Control': 'max-age=0',
     }
-    if safe:
-        response = requests.get(url, timeout=30, headers=headers)
-        # Use BeautifulSoup to parse the HTML
-        soup = BeautifulSoup(response.text, 'html.parser')
-        main = soup.find('main')
-        if main:
+    # method 1: use newspaper parsing
+    article = Article(url, keep_article_html=True, browser_user_agent=headers['User-Agent'], headers=headers, verbose=True)
+    article.download()
+    article.parse()
+    title = article.title or title
+    html = article.article_html
+    if len(html) < 100:
+        html = None
+        
+    # method 2: use readability to parse the html
+    if not html:
+        print(f'--> using readability to parse the website')
+        # response = requests.get(url, timeout=30, headers=headers)
+        # doc = Document(response.text)
+        doc = Document(article.html, min_text_length=100)
+        title = doc.title() or title
+        html = doc.summary()
+        if not html or len(html) < 100:
+            html = None
+    
+    # fallback: Use BeautifulSoup to parse the HTML
+    if not html:
+        print('--> using native bs4 parsing')
+        soup = BeautifulSoup(article.html, 'html.parser')
+        if main := soup.find('main'):
             soup = main
         html = soup.prettify()
-    else:
-        # use newspaper for better parsing
-        article = Article(url, browser_user_agent=headers['User-Agent'], headers=headers, verbose=True)
-        try:
-            article.download()
-        except:
-            return parse_web_content(url, safe=True)
-        html = article.html
-        if len(html) < 100:
-            return parse_web_content(url, safe=True)
         
     # Use html2text to convert the parsed HTML to plain text
     html2md = HTML2Text()
     html2md.ignore_links = True
     html2md.bypass_tables = False
-    html2md.ignore_images = True
+    html2md.ignore_images = False
     html2md.ignore_emphasis = False
     readable_text = html2md.handle(html)
-    
-    # safe
-    if not safe and len(readable_text) < 100:
-        print(f'===> Unable to parse website, got content:\n {readable_text}, \n===>parse with safe method')
-        return parse_web_content(url, safe=True)
     
     # synthesis
     web_content = f'[Title: {title}]\n\n{readable_text}'
@@ -175,10 +180,12 @@ tool_list = {
 }
 
 if __name__ == '__main__':
-    res = google_search('北京的地道餐厅')
-    pprint(res)
-    print('-'*50)
-    content = parse_web_content(res[4]['url'])
-    pprint(content)
-    with open('test/test.md', 'w') as f:
-        f.write(content)
+    # res = google_search('北京的地道餐厅')
+    # pprint(res)
+    # print('-'*50)
+    # content = parse_web_content(res[4]['url'])
+    # pprint(content)
+    
+    url = 'https://t.cj.sina.com.cn/articles/view/5772303575/1580e5cd70270131h2#:~:text=根据市场研究机构Cartner,创纪录的了7.1%25%E3%80%82'
+    content = parse_web_content(url)
+    print(content)

@@ -91,7 +91,8 @@ def request_chat(task, data, header, queue=None):
             response = requests.post(url, headers=header, data=data2, files=fobject, stream=stream, timeout=300)
     except Exception as e:
         utils.logger.error(e)
-        queue.put({model.SERVER_ERROR: '服务器超时'})
+        if queue:
+            queue.put({model.SERVER_ERROR: '服务器超时'})
         return
     if stream and queue is not None and response.ok:
         tool_results = []

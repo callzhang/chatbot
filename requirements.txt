@@ -16,3 +16,4 @@ beautifulsoup4
 html2text
 st-pages
 newspaper3k
+readability-lxml
