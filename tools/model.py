@@ -15,7 +15,8 @@ from . import utils
 SUGGESTION_TOKEN = '[SUGGESTION]'
 FINISH_TOKEN = '[DONE]'
 RETRY_TOKEN = '[RETRY]'
-ACTIONS = [RETRY_TOKEN]
+TTS = '[TTS]'
+ACTIONS = [RETRY_TOKEN, TTS]
 TIMEOUT = 60
 LOGIN_CODE = 'login_code'
 SERVER_ERROR = '[SERVER_ERROR]'
@@ -33,6 +34,7 @@ class Task(Enum):
     BingAI = 'BingAI'
     text2img = '文字做图'
     ASR = '语音识别'
+    TTS = '文本朗读'
     @classmethod
     def names(cls):
         return [c.name for c in cls]

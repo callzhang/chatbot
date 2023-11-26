@@ -1,6 +1,6 @@
 import streamlit as st, pandas as pd
 # from streamlit_chat import message
-from tools import dialog, utils, controller, model, auth
+from tools import dialog, utils, controller, model, auth, speech
 import time, json
 from datetime import datetime, timedelta
 # from streamlit_extras.colored_header import colored_header
@@ -138,6 +138,12 @@ for i, message in enumerate(st.session_state.conversation):
     elif role == Role.assistant.name:
         message_placeholder =  st.chat_message(role)
         controller.show_streaming_message(message, message_placeholder)
+        # append tts action
+        # if i == len(st.session_state.conversation)-1:
+        #     if message_placeholder.button('▶️播放'):
+        #         st.toast('▶️正在转译语音')
+        #         f = speech.tts(message.content)
+        #         message_placeholder.audio(f.getvalue(), format='audio/mp3')
     else:
         raise Exception(f'Unknown role: {role}')
         with st.chat_message('error'):

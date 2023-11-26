@@ -1,7 +1,7 @@
 import streamlit as st
 from tools import model, utils
 from datetime import datetime
-from . import dialog, openai, bing, imagegen, asr
+from . import dialog, openai, bing, imagegen, speech
 import logging
 import re, ast, time
 
@@ -10,7 +10,7 @@ Role = model.Role
 Message = model.AppMessage
 
 gpt_media_types = openai.accepted_attachment_types
-asr_media_types = asr.accepted_types
+asr_media_types = speech.accepted_types
 
 
 task_params = {
@@ -19,7 +19,7 @@ task_params = {
     model.Task.GPT4.value: openai.task_params,
     model.Task.GPT4V.value: openai.task_params,
     model.Task.text2img.value: imagegen.task_params,
-    model.Task.ASR.value: asr.task_params,
+    model.Task.ASR.value: speech.task_params,
     model.Task.BingAI.value: bing.task_params,
 }
 
@@ -43,7 +43,7 @@ def show_streaming_message(message: Message, message_placeholder):
                 elif isinstance(item, dict):  # network error
                     if v := item.get(model.SERVER_ERROR):
                         message.content += f'\n\n{v}'
-                        message.actions = {'重试': model.RETRY_TOKEN}
+                        message.actions = {model.RETRY_TOKEN: '重试'}
                         finish_reply(message)
                     elif functions := item.get(model.TOOL_RESULT):
                         # message.content += f'```{json.dumps(v, indent=2, ensure_ascii=False)}```'
@@ -60,7 +60,7 @@ def show_streaming_message(message: Message, message_placeholder):
             # 超时
             if (datetime.now() - message.time).total_seconds() > model.TIMEOUT:
                 message.content += '\n\n请求超时，请重试...'
-                message.actions = {'重试': model.RETRY_TOKEN}
+                message.actions = {model.RETRY_TOKEN: '重试'}
                 finish_reply(message)
                 break
             # 渲染
@@ -99,8 +99,9 @@ def show_streaming_message(message: Message, message_placeholder):
         text_placeholder.markdown(content)
     # actions: only "retry" is supported
     if (actions := message.actions) and i == len(st.session_state.conversation) - 1:
-        for action, token in actions.items():
-            message_placeholder.button(action, on_click=handle_action, args=(token,))
+        for action, text in actions.items():
+            message_placeholder.button(
+                text, on_click=handle_action, args=(action,))
 
 ## 对输入进行应答
 def gen_response(query=None):
@@ -196,7 +197,7 @@ def gen_response(query=None):
         finish_reply(bot_response)
     elif task == Task.ASR.value:
         with st.spinner('正在识别'):
-            transcription = asr.transcript(attachment)
+            transcription = speech.transcript(attachment)
             bot_response = Message(
                 role= Role.assistant.name,
                 content = transcription,

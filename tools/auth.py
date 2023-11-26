@@ -22,7 +22,8 @@ def get_default_key(task):
 
 @utils.cached()
 def get_openai_key(task=None, username=None):
-    username=st.session_state.name
+    
+    username=st.session_state.name if 'name' in st.session_state else 'NA'
     my_openai_key_file = f'secrets/{username}/openai_key.json'
     if os.path.exists(my_openai_key_file):
         key = json.load(open(my_openai_key_file, 'r'))['openai_key']
