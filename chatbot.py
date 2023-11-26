@@ -159,7 +159,7 @@ with c1: # 新对话
     if st.button('➕', key='clear', help=help, disabled=disabled):
         del st.session_state.conversation
         title = dialog.new_dialog(st.session_state.name)
-        st.session_state.new_chat = title
+        st.session_state.chat_title_selection = title
         st.session_state.audio = None
         st.rerun()
 with c2: # 删除

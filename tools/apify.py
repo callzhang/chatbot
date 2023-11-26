@@ -36,6 +36,10 @@ function_parse_web_content = {
                 "type": "string",
                 "description": "The url of the web page to parse. Returns the content of the website in markdown format.",
             },
+            "title": {
+                "type": "string",
+                "description": "The title of the website wish to parse"
+            }
         },
         "required": ["url"],
     },
@@ -108,28 +112,31 @@ def google_search(query):
         return parsed_results, also_asks
     
 @retry(tries=3)
-def parse_web_content(url, safe=False):
+def parse_web_content(url, title=None, safe=False):
     """
     This function converts HTML content to a readable format
     """
     print(f'parsing web content: {url}')
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.5',
+        'DNT': '1',  # Do Not Track Request Header
+        'Connection': 'keep-alive',
+        'Upgrade-Insecure-Requests': '1',
+        'Cache-Control': 'max-age=0',
+    }
     if safe:
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-            'Accept-Language': 'en-US,en;q=0.5',
-            'DNT': '1',  # Do Not Track Request Header
-            'Connection': 'keep-alive',
-            'Upgrade-Insecure-Requests': '1',
-            'Cache-Control': 'max-age=0',
-        }
         response = requests.get(url, timeout=30, headers=headers)
         # Use BeautifulSoup to parse the HTML
         soup = BeautifulSoup(response.text, 'html.parser')
+        main = soup.find('main')
+        if main:
+            soup = main
         html = soup.prettify()
     else:
         # use newspaper for better parsing
-        article = Article(url)
+        article = Article(url, browser_user_agent=headers['User-Agent'], headers=headers, verbose=True)
         try:
             article.download()
         except:
@@ -148,8 +155,12 @@ def parse_web_content(url, safe=False):
     
     # safe
     if not safe and len(readable_text) < 100:
+        print(f'===> Unable to parse website, got content:\n {readable_text}, \n===>parse with safe method')
         return parse_web_content(url, safe=True)
-    return readable_text
+    
+    # synthesis
+    web_content = f'[Title: {title}]\n\n{readable_text}'
+    return web_content
 
 #------------tools list-------------
 tool_list = {

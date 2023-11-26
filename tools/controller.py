@@ -33,28 +33,28 @@ def show_streaming_message(message: Message, message_placeholder):
         status_container = None
         while (queue := message.queue) is not None:  # streaming
             while queue.qsize() > 0:
-                char = queue.get()
+                item = queue.get()
                 message.time = datetime.now()
-                if isinstance(char, str):
-                    if char == model.FINISH_TOKEN:
+                if isinstance(item, str):
+                    if item == model.FINISH_TOKEN:
                         finish_reply(message)
                         break
-                    message.content += char
-                elif isinstance(char, dict):  # network error
-                    if v := char.get(model.SERVER_ERROR):
+                    message.content += item
+                elif isinstance(item, dict):  # network error
+                    if v := item.get(model.SERVER_ERROR):
                         message.content += f'\n\n{v}'
                         message.actions = {'重试': model.RETRY_TOKEN}
                         finish_reply(message)
-                    elif functions := char.get(model.TOOL_RESULT):
+                    elif functions := item.get(model.TOOL_RESULT):
                         # message.content += f'```{json.dumps(v, indent=2, ensure_ascii=False)}```'
                         message.functions += functions
                         # finish_reply(message)
-                    elif v := char.get(model.STATUS):
+                    elif v := item.get(model.STATUS):
                         if not status_container: #init
                             status_container = status_placeholder.status('正在检索', expanded=True)
-                        help = char.get(model.HELP)
+                        help = item.get(model.HELP)
                         status_container.markdown(v, help=help)
-                        message.status.append(v)
+                        message.status.append(item)
                 else:
                     raise Exception(f'Unknown content type: {type(content)}')
             # 超时
@@ -75,7 +75,7 @@ def show_streaming_message(message: Message, message_placeholder):
     if message.status: # show status
         with status_placeholder.status('正在检索') as status:
             for s in message.status:
-                status.write(s)
+                status.markdown(s.get(model.STATUS), help=s.get(model.HELP))
             status.update(label='检索完成', state="complete", expanded=False)
 
     # media

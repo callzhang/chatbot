@@ -43,11 +43,9 @@ def init_dialog(username):
         st.session_state.dialog_history = dialog_history['title'].tolist()
         # 没有历史记录或创建新对话，增加“新对话”至title
         if not st.session_state.dialog_history:
-            new_dialog(username)
+            dialog_title = new_dialog(username)
+            st.session_state.selected_title = dialog_title
             st.rerun()
-        elif 'new_chat' in st.session_state:
-            st.session_state.selected_title = st.session_state.new_chat
-            del st.session_state.new_chat
         elif 'chat_title_selection' in st.session_state:
             st.session_state.selected_title = st.session_state.chat_title_selection
             if st.session_state.selected_title not in st.session_state.dialog_history:

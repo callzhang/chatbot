@@ -74,22 +74,25 @@ def request_chat(task, data, header, queue=None):
     url = data.pop('url')
     file = data.pop('file') if 'file' in data else None
     stream = data['stream']
-    if not task == model.Task.GPT4V.value: # gpt-3.5, gpt-4
-        # header['Content-Type'] = 'application/json'
-        response = requests.post(url, headers=header, json=data, stream=stream, timeout=model.TIMEOUT/2)
-    else: # gpt4v
-        data2 = {k:v for k, v in data.items() if k in ['messages', 'stream']}
-        message = ''
-        for k in range(len(data['messages'])-1, 0, -1):
-            if data['messages'][k]['role'] == model.Role.user.name:
-                message = data['messages'][k]['content']
-                break
-        data2['message'] = message
-        fobject = {'file': (file.name, file)}
-        # header['Content-Type'] = 'multipart/form-data' # The issue is that the Content-Type header in your request is missing the boundary parameter, which is crucial for the server to parse the multipart form data correctly. The requests library in Python should add this parameter automatically when you pass data through the files parameter. It seems like the Content-Type header is being set manually somewhere which is overriding the automatically set header by requests. Make sure that you are not setting the Content-Type header manually anywhere in your code or in any middleware that might be modifying the request.
-        response = requests.post(url, headers=header, data=data2, files=fobject, stream=stream, timeout=300)
-    if DEBUG and queue:
-        queue.put('⏳receiving response in another thread \n\n')
+    try:
+        if not task == model.Task.GPT4V.value: # gpt-3.5, gpt-4
+            # header['Content-Type'] = 'application/json'
+            response = requests.post(url, headers=header, json=data, stream=stream, timeout=model.TIMEOUT/2)
+        else: # gpt4v
+            data2 = {k:v for k, v in data.items() if k in ['messages', 'stream']}
+            message = ''
+            for k in range(len(data['messages'])-1, 0, -1):
+                if data['messages'][k]['role'] == model.Role.user.name:
+                    message = data['messages'][k]['content']
+                    break
+            data2['message'] = message
+            fobject = {'file': (file.name, file)}
+            # header['Content-Type'] = 'multipart/form-data' # The issue is that the Content-Type header in your request is missing the boundary parameter, which is crucial for the server to parse the multipart form data correctly. The requests library in Python should add this parameter automatically when you pass data through the files parameter. It seems like the Content-Type header is being set manually somewhere which is overriding the automatically set header by requests. Make sure that you are not setting the Content-Type header manually anywhere in your code or in any middleware that might be modifying the request.
+            response = requests.post(url, headers=header, data=data2, files=fobject, stream=stream, timeout=300)
+    except Exception as e:
+        utils.logger.error(e)
+        queue.put({model.SERVER_ERROR: '服务器超时'})
+        return
     if stream and queue is not None and response.ok:
         tool_results = []
         for line in response.iter_lines():
@@ -104,6 +107,7 @@ def request_chat(task, data, header, queue=None):
                         print('tool_results: ', tool_results)
                         return {model.TOOL_RESULT: tool_results}
                     else:
+                        queue.put('\n\n')
                         queue.put(model.FINISH_TOKEN)
                         print('\n'+'-'*60)
                         return
@@ -235,7 +239,7 @@ def get_search_content(task, question, search_result, also_asks, queue):
         for name, func, args in get_function_calls(tool_results):
             assert name == 'parse_web_content'
             URL = args["url"]
-            title = [r['title'] for r in search_result if r['url']==URL][0]
+            title = [r['title'] for r in search_result if URL in r['url']][0]
             # 浏览信息
             web_content = func(**args)
             if not web_content:

@@ -75,7 +75,7 @@ class AppMessage(BaseModel):
         
     role: str # system/user/assistant
     content: str | None # text message displayed in the chat, None when using text2img
-    status: list[str] = [] # status updates for searching or other actions
+    status: list[dict] = [] # status updates for searching or other actions
     time: datetime # time created
     task: str | None # task type using Task, None for system message
     name: str # user name or model name
@@ -171,8 +171,18 @@ class AppMessage(BaseModel):
         if not status_list:
             return []
         if isinstance(status_list, str):
-            status_list = eval(status_list)
+            _status_list = eval(status_list)
+            assert isinstance(_status_list, list)
+            status_list = []
+            for s in _status_list:
+                if isinstance(s, str):
+                    status_list.append({STATUS: s})
+                elif isinstance(s, dict):
+                    status_list.append(s)
+                else:
+                    raise NotImplementedError
         if isinstance(status_list, list):
+            assert all(isinstance(s, dict) for s in status_list)
             return status_list
         else:
             raise ValueError(status_list)
