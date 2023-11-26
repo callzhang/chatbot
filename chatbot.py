@@ -156,10 +156,10 @@ with c1: # 新对话
         disabled, help = True, '访客不支持超过10轮对话，请联系管理员'
     else:
         disabled, help = False, '新对话'
-    if st.button('➕', key='clear', help=help, disabled=disabled):
+    if st.button('➕', help=help, disabled=disabled):
         del st.session_state.conversation
         title = dialog.new_dialog(st.session_state.name)
-        st.session_state.chat_title_selection = title
+        st.session_state.new_title = title
         st.session_state.audio = None
         st.rerun()
 with c2: # 删除

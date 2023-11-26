@@ -309,7 +309,9 @@ def conversation2history(conversation:list[model.AppMessage], guest, task) -> li
             st.toast(f"历史数据过长，舍弃: {chat_history[0]['content'][:10]}")
         chat_history.pop(0)
     chat_history.append(dialog.suggestion_prompt)
-    print(f"sending conversation rounds: {len(chat_history)}, length:{l}")
+    if task == model.Task.ChatSearch.value:
+        chat_history.append(dialog.search_prompt)
+    utils.logger.info(f"sending conversation rounds: {len(chat_history)}, length:{l}")
     return chat_history
 
 # convert openai function_call result to (name, function, query)

@@ -20,6 +20,7 @@ system_prompt = [
 ]
 
 suggestion_prompt = {"role": "system", "content": f'请在你的回答的最后面给出3个启发性问题，让用户可以通过问题进一步理解该概念，并确保用户能继续追问。格式格式为：{model.SUGGESTION_TOKEN}: ["启发性问题1", "启发性问题2", "启发性问题3"]。请注意：这个启发性问题列表放在最后，且用一行展示，不要换行。'}
+search_prompt = {"role": "system", "content": f'如果用户的问题是常识性的问题，请直接回答，不用调用function检索。'}
 
 staff_prompt = lambda user: [{"role": "assistant", "content": f"你好，{user}，请问有什么可以帮助你？"}]
 guest_prompt = lambda user: [{"role": "system", "content": f'用户是访客，名字为{user}，请用非常精简的方式回答问题。'},
@@ -41,13 +42,18 @@ def init_dialog(username):
         dialog_history = get_dialog_history(username)
         # 初始化对话列表
         st.session_state.dialog_history = dialog_history['title'].tolist()
-        # 没有历史记录或创建新对话，增加“新对话”至title
         if not st.session_state.dialog_history:
+            # 没有历史记录或创建新对话，增加“新对话”至title
             dialog_title = new_dialog(username)
             st.session_state.selected_title = dialog_title
             st.rerun()
+        elif 'new_title' in st.session_state:
+            st.session_state.selected_title = st.session_state.new_title
+            del st.session_state.new_title
         elif 'chat_title_selection' in st.session_state:
+            # select the title according to "chat_title_selection" UI selection
             st.session_state.selected_title = st.session_state.chat_title_selection
+            # if current selected title in UI doesn't exist (due to deletion), select a new title
             if st.session_state.selected_title not in st.session_state.dialog_history:
                 st.session_state.selected_title = st.session_state.dialog_history[0]
         else:
