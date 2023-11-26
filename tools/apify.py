@@ -10,7 +10,6 @@ from newspaper import Article
 
 apify_token = auth.get_apify_token()
 
-
 # function calling
 function_google_search = {
     "name": "google_search",
@@ -112,6 +111,12 @@ def google_search(query):
         parsed_results = [r for r in parsed_results if 'url' in r]
         return parsed_results, also_asks
     
+    
+    
+MIN_HTML_LEN = 1000
+MIN_TEXT_LEN = 200
+
+
 @retry(tries=3)
 def parse_web_content(url, title=None):
     """
@@ -133,7 +138,8 @@ def parse_web_content(url, title=None):
     article.parse()
     title = article.title or title
     html = article.article_html
-    if len(html) < 100:
+    print(len(html))
+    if len(html) < MIN_HTML_LEN:
         html = None
         
     # method 2: use readability to parse the html
@@ -141,10 +147,10 @@ def parse_web_content(url, title=None):
         print(f'--> using readability to parse the website')
         # response = requests.get(url, timeout=30, headers=headers)
         # doc = Document(response.text)
-        doc = Document(article.html, min_text_length=100)
+        doc = Document(article.html, min_text_length=MIN_TEXT_LEN)
         title = doc.title() or title
         html = doc.summary()
-        if not html or len(html) < 100:
+        if not html or len(html) < MIN_HTML_LEN:
             html = None
     
     # fallback: Use BeautifulSoup to parse the HTML
@@ -186,6 +192,6 @@ if __name__ == '__main__':
     # content = parse_web_content(res[4]['url'])
     # pprint(content)
     
-    url = 'https://t.cj.sina.com.cn/articles/view/5772303575/1580e5cd70270131h2#:~:text=根据市场研究机构Cartner,创纪录的了7.1%25%E3%80%82'
+    url = 'https://www.163.com/dy/article/ICMMTFDI05562G2J.html'
     content = parse_web_content(url)
     print(content)
