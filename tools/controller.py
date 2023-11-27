@@ -3,7 +3,7 @@ from tools import model, utils
 from datetime import datetime
 from . import dialog, openai, bing, imagegen, speech
 import logging
-import re, ast, time
+import re, ast, time, base64
 
 Task = model.Task
 Role = model.Role
@@ -223,6 +223,19 @@ def handle_action(action_token):
     else:
         raise NotImplementedError(action_token)
     
+def play_autio(bobj, container=None):
+    bobj.seek(0)
+    b64_audio = base64.b64encode(bobj.read()).decode()
+    audio_html = f"""
+    <audio controls autoplay>
+        <source src="data:audio/mp3;base64,{b64_audio}" type="audio/mp3">
+        Your browser does not support the audio element.
+    </audio>
+    """
+    if container:
+        container.markdown(audio_html, unsafe_allow_html=True)
+    else:
+        st.markdown(audio_html, unsafe_allow_html=True)
     
 def finish_reply(message):
     message.queue = None

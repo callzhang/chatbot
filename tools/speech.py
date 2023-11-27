@@ -9,6 +9,7 @@ from pydub.playback import play
 from io import BytesIO
 from threading import Thread
 from time import time
+from functools import lru_cache
 
 client = OpenAI(api_key=auth.get_openai_key())
 accepted_types = ['wav', 'mp3', 'mp4', 'm4a', 'webm']
@@ -41,6 +42,7 @@ def transcript(audio_file, prompt=None):
 
 
 # @retry(tries=3, delay=1)
+@lru_cache(maxsize=1000)
 def tts(input_text, output_file=None, play_audio=False, voice='nova', speed=1.2):
     # Supported voices are alloy, echo, fable, onyx, nova, and shimmer
     if not output_file and not play_audio: # 'must provide either `output_file` or `play_audio`'
@@ -67,7 +69,7 @@ def tts(input_text, output_file=None, play_audio=False, voice='nova', speed=1.2)
                 output_file.write(chunk)
         print(f'saving took {time()-t} seconds')
         return output_file
-    elif play_audio: # only playing at server
+    elif play_audio: # only playing at server NOT client
         print('playing')
         for chunk in response.iter_bytes():
             audio = AudioSegment.from_mp3(BytesIO(chunk))

@@ -139,11 +139,11 @@ for i, message in enumerate(st.session_state.conversation):
         message_placeholder =  st.chat_message(role)
         controller.show_streaming_message(message, message_placeholder)
         # append tts action
-        # if i == len(st.session_state.conversation)-1:
-        #     if message_placeholder.button('▶️播放'):
-        #         st.toast('▶️正在转译语音')
-        #         f = speech.tts(message.content)
-        #         message_placeholder.audio(f.getvalue(), format='audio/mp3')
+        if i == len(st.session_state.conversation)-1:
+            if message_placeholder.button('▶️播放'):
+                st.toast('▶️正在转译语音')
+                f = speech.tts(message.content)
+                controller.play_autio(f, message_placeholder)
     else:
         raise Exception(f'Unknown role: {role}')
         with st.chat_message('error'):
