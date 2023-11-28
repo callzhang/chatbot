@@ -1,7 +1,18 @@
+import oss2
+import requests
 import os, re, time,logging
 from transformers import GPT2Tokenizer
 from collections import defaultdict
 from functools import wraps
+from datetime import datetime, timedelta
+import streamlit as st
+
+
+# Create an OSS service
+auth = oss2.Auth(st.secrets.accessKeyId, st.secrets.accessKeySecret)
+bucket_name = 'stardust-public'
+endpoint = 'oss-cn-hangzhou.aliyuncs.com'
+bucket = oss2.Bucket(auth, endpoint=endpoint, bucket_name=bucket_name)
 
 ## logger
 logger = logging.getLogger('my_logger')
@@ -104,8 +115,53 @@ def parse_file_info(path_or_str):
     # filetype = os.path.splitext(filename)[-1].replace('.','')
     return filename, mime_type
 
+# excel 
+def excel_num_to_datetime(excel_num):
+    # Excel's epoch starts on December 30, 1899
+    epoch = datetime(1899, 12, 30)
+
+    # Split the number into days and fractional days
+    days = int(excel_num)
+    fractional_day = excel_num - days
+
+    # Convert the fractional day to seconds
+    seconds_in_day = 24 * 60 * 60
+    total_seconds = int(fractional_day * seconds_in_day)
+
+    # Calculate hours, minutes, and seconds
+    hours = total_seconds // 3600
+    minutes = (total_seconds % 3600) // 60
+    seconds = total_seconds % 60
+
+    # Convert the Excel number to a datetime
+    converted_date = epoch + \
+        timedelta(days=days, hours=hours, minutes=minutes, seconds=seconds)
+    return converted_date
+
+
+# oss
+def save_uri_to_oss(uri:str, prefix=''):
+    prefix = prefix if prefix.endswith('/') else prefix+'/' if prefix else ''
+    if uri.startswith('http'):
+        # Download the file from the URL
+        response = requests.get(uri)
+        if not response.ok:
+            raise Exception(f'Failed to download file from url: {uri}, reason:\n {response.text}')
+        file_content = response.content
+    elif os.path.exists(uri):
+        with open(uri, 'rb') as f:
+            file_content = f.read()
+
+    # Upload the file to OSS
+    object_name = os.path.basename(uri.split('?')[0])
+    object_path = f'data/chatbot/{prefix}{object_name}'
+    bucket.put_object(object_path, file_content)
+    # http://stardust-public.oss-cn-hangzhou.aliyuncs.com/data/mart/5fb60bfa-43f6-44e7-94c0-8683eb9ee99a.jpeg
+    oss_url = f"https://{bucket_name}.{endpoint}/{object_path}"
+    return oss_url, file_content
 
 if __name__ == '__main__':
-    print(token_size('hello world'))
-    print(truncate_text('These smaller models provide a good balance between performance and resource usage, making them suitable for environments where computational resources are a concern. Remember that while smaller models are faster and use less memory, they might not capture the nuances of language as effectively as larger models like GPT-2 or BERT-base.', 5))
+    # print(token_size('hello world'))
+    # print(truncate_text('These smaller models provide a good balance between performance and resource usage, making them suitable for environments where computational resources are a concern. Remember that while smaller models are faster and use less memory, they might not capture the nuances of language as effectively as larger models like GPT-2 or BERT-base.', 5))
     
+    save_uri_to_oss('voice.mp3', 'Derek')

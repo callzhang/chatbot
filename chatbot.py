@@ -9,6 +9,7 @@ import extra_streamlit_components as stx
 from rich.traceback import install
 install(show_locals=True, word_wrap=True)
 
+
 # 初始化
 Task = model.Task
 Role = model.Role
@@ -52,7 +53,7 @@ if 'name' not in st.session_state:
                 st.session_state.guest = False
                 if exp_date.date() > expiration:
                     exp_date = datetime(expiration.year, expiration.month, expiration.day, 23, 59, 59)
-        else:
+        else: #guest
             st.session_state.name = code
         cm.set(model.LOGIN_CODE, code, expires_at=exp_date)
         st.rerun()
@@ -139,8 +140,8 @@ for i, message in enumerate(st.session_state.conversation):
         message_placeholder =  st.chat_message(role)
         controller.show_streaming_message(message, message_placeholder)
         # append tts action
-        if i == len(st.session_state.conversation)-1:
-            if message_placeholder.button('▶️播放'):
+        if not st.session_state.guest and i == len(st.session_state.conversation)-1 and content:
+            if message_placeholder.button('▶️'):
                 st.toast('▶️正在转译语音')
                 f = speech.tts(message.content)
                 controller.play_autio(f, message_placeholder)
@@ -184,6 +185,7 @@ with c4: # 修改
         del st.session_state.conversation
         new_title = st.session_state.new_title_text
         dialog.edit_dialog_name(st.session_state.name, st.session_state.selected_title, new_title)
+        st.session_state.seleted_title = new_title
     if st.button('✏️', help='修改对话名称'):
         new_title = st.sidebar.text_input('修改名称', st.session_state.selected_title, help='修改当前对话标题', key='new_title_text', on_change=update_title)
         

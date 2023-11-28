@@ -44,11 +44,12 @@ def gen_image(prompt):
     }
     res = requests.post(url, headers=header, json=data).json()
     if 'error' in res:
-        return res['error']['message']
+        raise  Exception(res['error']['message'])
     urls = [r['url'] for r in res['data']]
+    revised_prompts = [r['revised_prompt'] for r in res['data']]
     # return markdown
     # return url2markdown(urls)
-    return urls
+    return urls, revised_prompts
     
 
 

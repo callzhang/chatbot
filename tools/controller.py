@@ -9,7 +9,7 @@ Task = model.Task
 Role = model.Role
 Message = model.AppMessage
 
-gpt_media_types = openai.accepted_attachment_types
+gpt_media_types = openai.accepted_image_types
 asr_media_types = speech.accepted_types
 
 
@@ -131,7 +131,7 @@ def gen_response(query=None):
     )
     # display and update db
     st.session_state.conversation.append(query_message)
-    dialog.update_conversation(st.session_state.name, st.session_state.selected_title, query_message)
+    dialog.append_dialog(st.session_state.name, st.session_state.selected_title, query_message)
 
     # response
     print(f'Start task({task}): {st.session_state.conversation[-1].content}')
@@ -182,10 +182,10 @@ def gen_response(query=None):
     elif task == Task.text2img.value:
         toast = st.toast('正在绘制', icon='🖌️')
         with st.spinner('正在绘制'):
-            urls = imagegen.gen_image(user_input)
+            urls, revised_prompts = imagegen.gen_image(user_input)
             bot_response = Message(
                 role= Role.assistant.name,
-                content = None ,
+                content = '\n\n'.join(revised_prompts),
                 task = model.Task(task).name,
                 name = task_params[task][task]['model'],
                 time = datetime.now(),
@@ -239,12 +239,7 @@ def play_autio(bobj, container=None):
     
 def finish_reply(message):
     message.queue = None
-    # if message.thread: # terminate streaming thread
-    #     message.thread.join()
-    #     message.thread = None
-    # else:
-    #     logging.info(f'{message.name}: {message.content}')
-    dialog.update_conversation(st.session_state.name, st.session_state.selected_title, message)
+    dialog.append_dialog(st.session_state.name, st.session_state.selected_title, message)
     print('-'*50)
     
 

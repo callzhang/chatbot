@@ -40,7 +40,7 @@ task_params = {
 temperature = 0.7
 roles2keep = ['system', 'user', 'assistant']
 key2keep = ['role', 'content']
-accepted_attachment_types = ['png', 'jpg', 'jpeg']
+accepted_image_types = ['png', 'jpg', 'jpeg']
 
 
 ## ------------receiving streaming server-sent events（异步）------------

@@ -18,4 +18,5 @@ st-pages
 newspaper3k
 readability-lxml
 gspread-pandas
-pyhub
+python-dateutil
+oss2

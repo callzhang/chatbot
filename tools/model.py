@@ -2,15 +2,18 @@
 from enum import Enum, unique
 # from collections import deque
 from queue import Queue
-from datetime import datetime
+from datetime import datetime, timedelta
 from streamlit.runtime.uploaded_file_manager import UploadedFile, UploadedFileRec
 from io import BytesIO
-import requests, os, logging, mimetypes
+import requests, os, logging, mimetypes, re
 from pydantic.dataclasses import dataclass # not useful as it cannot check arbitrary types
 from pydantic import BaseModel, validator
 from threading import Thread
 from pathlib import PosixPath
-from . import utils
+from .utils import parse_file_info, excel_num_to_datetime, endpoint, save_uri_to_oss
+from dateutil.parser import parse
+
+global username
 
 SUGGESTION_TOKEN = '[SUGGESTION]'
 FINISH_TOKEN = '[DONE]'
@@ -103,6 +106,11 @@ class AppMessage(BaseModel):
     def set_time(time):
         if not time:
             time = datetime.now()
+        elif isinstance(time, str):
+            time = parse(time)
+        elif isinstance(time, float):
+            time = excel_num_to_datetime(time)
+        assert isinstance(time, datetime)
         return time
            
     @validator('medias', pre=True)
@@ -111,7 +119,14 @@ class AppMessage(BaseModel):
             return None
         medias = []
         if isinstance(media_object, str):
-            media_list = eval(media_object)
+            if '=IMAGE(' in media_object:
+                media_list = re.findall(r'=IMAGE\("(.*)"\)', media_object)
+            else:
+                try:
+                    media_list = eval(media_object)
+                except Exception as e:
+                    print(f'failed to generate image')
+                    media_list = []
         elif isinstance(media_object, list):
             media_list = media_object
         elif isinstance(media_object, BytesIO):
@@ -125,31 +140,42 @@ class AppMessage(BaseModel):
             if isinstance(m, str):
                 # url, download to local file
                 if m.startswith('http'):
-                    data = requests.get(m).content
-                elif os.path.exists(m):
-                    data = open(m, 'rb').read()
+                    if endpoint in m:
+                        # already in OSS
+                        res = requests.get(m)
+                        if res.ok:
+                            data = res.content
+                            uri = m
+                        else:
+                            print(f'Unable to download url: {m}')
+                            continue
+                    else:
+                        # upload to oss
+                        uri, data = save_uri_to_oss(m)
+                # elif os.path.exists(m):
+                #     data = open(m, 'rb').read()
                 else:
                     raise Exception(f'Unknown media url or file not found: {m}')
-                filename, filetype = utils.parse_file_info(m)
+                filename, filetype = parse_file_info(m)
                 rec = UploadedFileRec(
                     file_id=m,
                     name=filename,
                     type=filetype,
                     data=data,
                 )
-                medias.append(UploadedFile(rec, m))
-            elif isinstance(m, PosixPath) and os.path.exists(m):
-                data = open(m, 'rb').read()
-                filename, filetype = utils.parse_file_info(m)
-                rec = UploadedFileRec(
-                    file_id=str(m),
-                    name=filename,
-                    type=filetype,
-                    data=data,
-                )
-                medias.append(UploadedFile(rec, m))
+                medias.append(UploadedFile(rec, uri))
+            # elif isinstance(m, PosixPath) and os.path.exists(m):
+            #     data = open(m, 'rb').read()
+            #     filename, filetype = parse_file_info(m)
+            #     rec = UploadedFileRec(
+            #         file_id=str(m),
+            #         name=filename,
+            #         type=filetype,
+            #         data=data,
+            #     )
+            #     medias.append(UploadedFile(rec, m))
             else:
-                raise Exception(f'Unknown media type: {type(m)}')
+                raise Exception(f'Unknown media: {m}')
         return medias or None
     
     @validator('suggestions', pre=True)
@@ -165,7 +191,7 @@ class AppMessage(BaseModel):
             actions = eval(actions)
             assert isinstance(actions, dict)
             for k, v in actions.items():
-                assert v in ACTIONS
+                assert k in ACTIONS
         return actions or None
     
     @validator('status', pre=True)
@@ -188,6 +214,7 @@ class AppMessage(BaseModel):
             return status_list
         else:
             raise ValueError(status_list)
+
 
 if __name__ == '__main__':
     msg = AppMessage(

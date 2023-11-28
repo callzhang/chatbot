@@ -4,8 +4,6 @@ from . import model, auth
 from retry import retry
 import streamlit as st
 from pathlib import Path
-from pydub import AudioSegment
-from pydub.playback import play
 from io import BytesIO
 from threading import Thread
 from time import time
@@ -43,9 +41,9 @@ def transcript(audio_file, prompt=None):
 
 # @retry(tries=3, delay=1)
 @lru_cache(maxsize=1000)
-def tts(input_text, output_file=None, play_audio=False, voice='nova', speed=1.2):
+def tts(input_text, output_file=None, voice='nova', speed=1.2):
     # Supported voices are alloy, echo, fable, onyx, nova, and shimmer
-    if not output_file and not play_audio: # 'must provide either `output_file` or `play_audio`'
+    if not output_file: # 'must provide either `output_file` or `play_audio`'
         output_file = BytesIO()
     config = task_params[model.Task.TTS.value]
     
@@ -59,21 +57,14 @@ def tts(input_text, output_file=None, play_audio=False, voice='nova', speed=1.2)
         )
     except openai.RateLimitError as e:
         st.error(e)
-    if output_file:
-        print(f'saving to {output_file}')
-        t = time()
-        if isinstance(output_file, str):
-            response.stream_to_file(output_file)
-        elif isinstance(output_file, BytesIO):
-            for chunk in response.iter_bytes():
-                output_file.write(chunk)
-        print(f'saving took {time()-t} seconds')
-        return output_file
-    elif play_audio: # only playing at server NOT client
-        print('playing')
+    t = time()
+    if isinstance(output_file, str):
+        response.stream_to_file(output_file)
+    elif isinstance(output_file, BytesIO):
         for chunk in response.iter_bytes():
-            audio = AudioSegment.from_mp3(BytesIO(chunk))
-            play(audio)
+            output_file.write(chunk)
+    print(f'saving took {time()-t} seconds')
+    return output_file
     
 # play in the background
 def play_tts(input_text, voice='nova', speed=1.2):
