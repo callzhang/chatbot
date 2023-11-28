@@ -4,13 +4,14 @@ from datetime import datetime
 from . import dialog, openai, bing, imagegen, speech
 import logging
 import re, ast, time, base64
+from streamlit.runtime.uploaded_file_manager import UploadedFile, UploadedFileRec
 
 Task = model.Task
 Role = model.Role
 Message = model.AppMessage
 
-gpt_media_types = openai.accepted_image_types
-asr_media_types = speech.accepted_types
+openai_image_types = openai.accepted_image_types
+speech_media_types = speech.accepted_types
 
 
 task_params = {
@@ -21,11 +22,13 @@ task_params = {
     model.Task.text2img.value: imagegen.task_params,
     model.Task.ASR.value: speech.task_params,
     model.Task.BingAI.value: bing.task_params,
+    model.Task.TTS.value: speech.task_params
 }
 
 ## display assistant message
 def show_streaming_message(message: Message, message_placeholder):
     i = st.session_state.conversation.index(message)
+    last = i == len(st.session_state.conversation) - 1
     role, content, medias =  message.role, message.content, message.medias
     status_placeholder = message_placeholder.empty()
     text_placeholder = message_placeholder.empty()
@@ -83,13 +86,13 @@ def show_streaming_message(message: Message, message_placeholder):
     suggestions = message.suggestions
     if medias:
         for media in medias:
-            display_media(media)
+            display_media(media, container=message_placeholder, autoplay=last)
     # suggestion
     if content and (model.SUGGESTION_TOKEN in content or '启发性问题:' in content):
         content, suggestions = parse_suggestions(content)
         message.suggestions = suggestions
         message.content = content
-    if suggestions and i == len(st.session_state.conversation) - 1:
+    if suggestions and last:
         suggestions = set(suggestions)
         for suggestion in suggestions:
             message_placeholder.button('👉🏻'+suggestion[:30], help=suggestion,
@@ -98,7 +101,7 @@ def show_streaming_message(message: Message, message_placeholder):
     if content:
         text_placeholder.markdown(content)
     # actions: only "retry" is supported
-    if (actions := message.actions) and i == len(st.session_state.conversation) - 1:
+    if (actions := message.actions) and last:
         for action, text in actions.items():
             message_placeholder.button(
                 text, on_click=handle_action, args=(action,))
@@ -108,7 +111,7 @@ def gen_response(query=None):
     task = st.session_state.task
     assert task in Task.values(), NotImplementedError(task)
     # remove suggestion
-    if st.session_state.conversation:
+    if 'conversation' in st.session_state and st.session_state.conversation:
         st.session_state.conversation[-1].suggestions = None
         st.session_state.conversation[-1].actions = None
         
@@ -207,6 +210,29 @@ def gen_response(query=None):
             )
             st.session_state.conversation.append(bot_response)
             finish_reply(bot_response)
+    elif task == Task.TTS.value:
+        with st.spinner('正在转译'):
+            speech_obj = speech.text_to_speech(user_input)
+            speech_data = speech_obj.getvalue()
+            filename = f'{user_input[:20]}.mp3'
+            filetype = 'audio/mp3'
+            rec = UploadedFileRec(
+                    file_id=str(speech_data)[:20],
+                    name=filename,
+                    type=filetype,
+                    data=speech_data,
+                )
+            speech_file = UploadedFile(rec, None)
+            bot_response = Message(
+                role=Role.assistant.name,
+                content=None,
+                task=model.Task(task).name,
+                name = task_params[task][task]['model'],
+                time = datetime.now(),
+                medias=speech_file
+            )
+            st.session_state.conversation.append(bot_response)
+            finish_reply(bot_response)
     else:
         raise NotImplementedError(task)
     
@@ -223,11 +249,12 @@ def handle_action(action_token):
     else:
         raise NotImplementedError(action_token)
     
-def play_autio(bobj, container=None):
+def play_audio(bobj, container=None, autoplay=False):
     bobj.seek(0)
     b64_audio = base64.b64encode(bobj.read()).decode()
+    autoplay_tag = 'autoplay' if autoplay else ''
     audio_html = f"""
-    <audio controls autoplay>
+    <audio controls {autoplay_tag}>
         <source src="data:audio/mp3;base64,{b64_audio}" type="audio/mp3">
         Your browser does not support the audio element.
     </audio>
@@ -243,17 +270,18 @@ def finish_reply(message):
     print('-'*50)
     
 
-def display_media(media):
+def display_media(media, container=st, autoplay=False):
     media_type = media.type.split('/')[0]
-    if media.type in gpt_media_types or media_type == model.MediaType.image.name:
+    if media.type in openai_image_types or media_type == model.MediaType.image.name:
         media_type == model.MediaType.image
-        st.image(media, use_column_width='always')
-    elif media.type in asr_media_types or media_type == model.MediaType.audio.name:
+        container.image(media, use_column_width='always')
+    elif media.type in speech_media_types or media_type == model.MediaType.audio.name:
         media_type == model.MediaType.audio
-        st.audio(media)
+        # st.audio(media)
+        play_audio(media, container=container, autoplay=autoplay)
     elif media.type == 'mp4' or media_type == model.MediaType.video.name:
         media_type == model.MediaType.video
-        st.video(media)
+        container.video(media)
     else:
         raise NotImplementedError(media.tpye)
     return media_type

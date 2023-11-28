@@ -3,7 +3,7 @@ import os, logging, json, re
 from datetime import datetime
 from pathlib import Path
 import pandas as pd
-from . import model
+from . import model, utils
 import streamlit as st
 from gspread_pandas import Spread, Client
 from gspread import Worksheet, Spreadsheet
@@ -78,6 +78,7 @@ def init_dialog(username):
 
 ## conversation: list[Message] -> chat: dict -> save to file
 def append_dialog(username, title, message:model.AppMessage):
+    from .controller import openai_image_types
     dialog = get_dialog(username, title)
     # create chat entry as a dict
     message_dict = message.model_dump() 
@@ -86,8 +87,10 @@ def append_dialog(username, title, message:model.AppMessage):
     # convert medias to local file
     if message.medias:
         media_uri_list = [m._file_urls for m in message.medias]
-        if len(media_uri_list) == 1 and Path(media_uri_list[0].split('?')[0]).suffix in ['.png', '.jpg', '.jpeg']:
-            message_dict['medias'] = f'=IMAGE("{media_uri_list[0]}")'
+        first_url = media_uri_list[0]
+        filename, mime_type = utils.parse_file_info(first_url)
+        if len(media_uri_list) == 1 and mime_type.split('/')[-1] in openai_image_types:
+            message_dict['medias'] = f'=IMAGE("{first_url}")'
         else:
             message_dict['medias'] = media_uri_list
     message_value = convert_update_value(message_dict)

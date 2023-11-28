@@ -124,24 +124,23 @@ class AppMessage(BaseModel):
             else:
                 try:
                     media_list = eval(media_object)
+                    assert isinstance(media_list, list)
                 except Exception as e:
-                    print(f'failed to generate image')
+                    print(f'failed to eval media string: {media_object}')
                     media_list = []
         elif isinstance(media_object, list):
             media_list = media_object
         elif isinstance(media_object, BytesIO):
-            return [media_object]
+            media_list = [media_object]
         else:
             raise Exception(f'Unknown media type: {type(m)}')
         
-        # process media list
-        assert isinstance(media_list, list)
+        # upload media to OSS
         for m in media_list:
             if isinstance(m, str):
                 # url, download to local file
                 if m.startswith('http'):
-                    if endpoint in m:
-                        # already in OSS
+                    if endpoint in m: # already on OSS
                         res = requests.get(m)
                         if res.ok:
                             data = res.content
@@ -149,8 +148,7 @@ class AppMessage(BaseModel):
                         else:
                             print(f'Unable to download url: {m}')
                             continue
-                    else:
-                        # upload to oss
+                    else: # upload to oss
                         uri, data = save_uri_to_oss(m)
                 # elif os.path.exists(m):
                 #     data = open(m, 'rb').read()
@@ -174,6 +172,11 @@ class AppMessage(BaseModel):
             #         data=data,
             #     )
             #     medias.append(UploadedFile(rec, m))
+            elif isinstance(m, UploadedFile):
+                if not m._file_urls:
+                    uri, data = save_uri_to_oss(m)
+                    m._file_urls = uri
+                medias.append(m)
             else:
                 raise Exception(f'Unknown media: {m}')
         return medias or None

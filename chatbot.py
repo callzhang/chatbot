@@ -77,27 +77,28 @@ if st.session_state.guest:
     st.info('访客模式：支持最大10轮对话和20轮聊天历史')
 
 # 添加文本输入框
+disabled = st.session_state.guest
 if st.session_state.guest and len(st.session_state.conversation) > 10:
     disabled, help = True, '访客不支持长对话，请联系管理员'
 elif task == Task.ChatGPT.value:
     disabled, help = False, '输入你的问题，然后按回车提交。'
 elif task == Task.ChatSearch.value:
-    disabled, help = st.session_state.guest, '输入你的问题，如果信息需要检索，会自动调用搜索引擎。'
+    help = '输入你的问题，如果信息需要检索，会自动调用搜索引擎。'
 elif task == Task.GPT4.value:
-    disabled, help = st.session_state.guest, '输入你的问题，然后按回车提交。'
+    help = '输入你的问题，然后按回车提交。'
 elif task == Task.GPT4V.value:
-    disabled, help = st.session_state.guest, '输入你的问题，并上传图片，然后按回车提交。'
+    help = '输入你的问题，并上传图片，然后按回车提交。'
 elif task == Task.BingAI.value:
     if utils.get_bingai_key(st.session_state.name) is None:
         disabled, help = True, '请先在设置中填写BingAI的秘钥'
     else:
         disabled, help = False, '输入你的问题，然后按回车提交给BingAI。'
 elif task == Task.text2img.value:
-    disabled = st.session_state.guest
     help = '访客不支持文字做图' if st.session_state.guest else '输入你的prompt'
 elif task == Task.ASR.value:
-    disabled = st.session_state.guest
     help = '访客不支持语音识别' if st.session_state.guest else '上传语音文件'
+elif task == Task.TTS.value:
+    help = '访客不支持文本朗读' if st.session_state.guest else '输入需要朗读的文本'
 else:
     raise NotImplementedError(task)
 
@@ -106,10 +107,10 @@ label = None
 max_chars = controller.task_params[task][task]['max_tokens']
 if task in Task.ASR.value:
     label = '🎤上传语音文件'
-    filetypes = controller.asr_media_types
+    filetypes = controller.speech_media_types
 elif task == Task.GPT4V.value:
     label = '🎨上传图片'
-    filetypes = controller.gpt_media_types
+    filetypes = controller.openai_image_types
 if label:
     attachment = st.file_uploader(
         label, type=filetypes, key='attachment', disabled=disabled)
@@ -143,8 +144,8 @@ for i, message in enumerate(st.session_state.conversation):
         if not st.session_state.guest and i == len(st.session_state.conversation)-1 and content:
             if message_placeholder.button('▶️'):
                 st.toast('▶️正在转译语音')
-                f = speech.tts(message.content)
-                controller.play_autio(f, message_placeholder)
+                f = speech.text_to_speech(message.content)
+                controller.play_audio(f, message_placeholder)
     else:
         raise Exception(f'Unknown role: {role}')
         with st.chat_message('error'):

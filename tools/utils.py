@@ -6,6 +6,8 @@ from collections import defaultdict
 from functools import wraps
 from datetime import datetime, timedelta
 import streamlit as st
+from io import BytesIO
+from functools import lru_cache
 
 
 # Create an OSS service
@@ -140,20 +142,26 @@ def excel_num_to_datetime(excel_num):
 
 
 # oss
-def save_uri_to_oss(uri:str, prefix=''):
-    prefix = prefix if prefix.endswith('/') else prefix+'/' if prefix else ''
-    if uri.startswith('http'):
-        # Download the file from the URL
-        response = requests.get(uri)
-        if not response.ok:
-            raise Exception(f'Failed to download file from url: {uri}, reason:\n {response.text}')
-        file_content = response.content
-    elif os.path.exists(uri):
-        with open(uri, 'rb') as f:
-            file_content = f.read()
+def save_uri_to_oss(uri:str|BytesIO, prefix=''):
+    if prefix and prefix.endswith('/'):
+        prefix += '/'
+    if isinstance(uri, BytesIO):
+        file_content = uri.getvalue()
+        object_name = f'tts_{datetime.now()}.mp3'
+    elif isinstance(uri, str):
+        assert endpoint not in uri, f'Double upload: {uri}, please check your code!'
+        object_name, mime = parse_file_info(uri)
+        if uri.startswith('http'):
+            # Download the file from the URL
+            response = requests.get(uri)
+            if not response.ok:
+                raise Exception(f'Failed to download file from url: {uri}, reason:\n {response.text}')
+            file_content = response.content
+        elif os.path.exists(uri):
+            with open(uri, 'rb') as f:
+                file_content = f.read()
 
     # Upload the file to OSS
-    object_name = os.path.basename(uri.split('?')[0])
     object_path = f'data/chatbot/{prefix}{object_name}'
     bucket.put_object(object_path, file_content)
     # http://stardust-public.oss-cn-hangzhou.aliyuncs.com/data/mart/5fb60bfa-43f6-44e7-94c0-8683eb9ee99a.jpeg

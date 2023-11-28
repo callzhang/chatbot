@@ -117,7 +117,7 @@ MIN_HTML_LEN = 1000
 MIN_TEXT_LEN = 200
 
 
-@retry(tries=3)
+@retry(tries=2)
 def parse_web_content(url, title=None):
     """
     This function converts HTML content to a readable format

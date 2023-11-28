@@ -41,7 +41,7 @@ def transcript(audio_file, prompt=None):
 
 # @retry(tries=3, delay=1)
 @lru_cache(maxsize=1000)
-def tts(input_text, output_file=None, voice='nova', speed=1.2):
+def text_to_speech(input_text, output_file=None, voice='nova', speed=1.2) -> BytesIO:
     # Supported voices are alloy, echo, fable, onyx, nova, and shimmer
     if not output_file: # 'must provide either `output_file` or `play_audio`'
         output_file = BytesIO()
@@ -68,11 +68,11 @@ def tts(input_text, output_file=None, voice='nova', speed=1.2):
     
 # play in the background
 def play_tts(input_text, voice='nova', speed=1.2):
-    t = Thread(target=tts, kwargs={'input_text':input_text, 'play_audio':True, 'voice':voice, 'speed':speed})
+    t = Thread(target=text_to_speech, kwargs={'input_text':input_text, 'play_audio':True, 'voice':voice, 'speed':speed})
     t.daemon = True
     t.start()
     
 
 if __name__ == '__main__':
     text = '华为自研的其他功能模块对华为手机等设备有着直接而深远的影响。华为不仅自研了鸿蒙系统，还在芯片领域取得了一定的成果，这为其手机模块的性能、功能提升以及5G领域的技术创新提供了有力支撑。同时，自研芯片可以填补国产手机在关键技术上的空缺，提高市场竞争力。另外，自研芯片可以缩短物联网设备间的信息传输距离，提高传输速度，同时使得生产成本得到有效控制。'
-    tts(text)
+    text_to_speech(text)

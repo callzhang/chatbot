@@ -8,6 +8,7 @@ from queue import Queue
 import streamlit as st
 from . import dialog, auth, model, apify, utils
 from openai import OpenAI
+from urllib.parse import urlparse
 
 DEBUG = st.secrets.debug
 STREAMING = st.secrets.streaming
@@ -240,7 +241,7 @@ def get_search_content(task, question, search_result, also_asks, queue):
         for name, func, args in get_function_calls(tool_results):
             assert name == 'parse_web_content'
             URL = args["url"]
-            title = [r['title'] for r in search_result if URL in r['url']][0]
+            title = args.get('title') or urlparse(URL).hostname
             # 浏览信息
             web_content = func(**args)
             if not web_content:
