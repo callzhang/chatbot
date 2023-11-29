@@ -12,7 +12,7 @@
             "justMyCode": true
         },
         {
-            "name": "test",
+            "name": "test current file",
             "type": "python",
             "request": "launch",
             "program": "${file}",

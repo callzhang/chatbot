@@ -1,9 +1,9 @@
 import streamlit as st
-from tools import model, utils
+from . import model, utils
 from datetime import datetime
 from . import dialog, openai, bing, imagegen, speech
 import logging
-import re, ast, time, base64
+import time, base64
 from streamlit.runtime.uploaded_file_manager import UploadedFile, UploadedFileRec
 
 Task = model.Task
@@ -67,7 +67,7 @@ def show_streaming_message(message: Message, message_placeholder):
                 finish_reply(message)
                 break
             # 渲染
-            content_full = message.content.replace(model.SUGGESTION_TOKEN, '')
+            content_full = message.content.replace(utils.SUGGESTION_TOKEN, '')
             text_placeholder.markdown(content_full + "▌")
             time.sleep(0.1)
         # remove msg and status
@@ -88,8 +88,8 @@ def show_streaming_message(message: Message, message_placeholder):
         for media in medias:
             display_media(media, container=message_placeholder, autoplay=last)
     # suggestion
-    if content and (model.SUGGESTION_TOKEN in content or '启发性问题:' in content):
-        content, suggestions = parse_suggestions(content)
+    if not suggestions:
+        content, suggestions = utils.parse_suggestions(content)
         message.suggestions = suggestions
         message.content = content
     if suggestions and last:
@@ -292,68 +292,3 @@ def call_functions(message):
     queue = message.queue
     
     
-## 处理提示
-def parse_suggestions(content:str):
-    if not content:
-        return None, None
-    reply = content
-    suggestions = []
-    if model.SUGGESTION_TOKEN in content or '启发性问题:' in content:
-        pattern1 = r'(\[SUGGESTION\]:\s?)(\[.+\])'
-        pattern2 = r'(\[SUGGESTION\]:\s?)(.{3,})'
-        pattern3 = r'\[SUGGESTION\]|启发性问题:\s*'
-        pattern31 = r'(-\s|\d\.\s)(.+)'
-        matches1 = re.findall(pattern1, reply)
-        matches2 = re.findall(pattern2, reply)
-        matches3 = re.findall(pattern3, reply)
-        
-        if matches1:
-            for m in matches1:
-                reply = reply.replace(''.join(m), '')
-                try:
-                    suggestions += ast.literal_eval(m[1])
-                except:
-                    print('==>Error parsing suggestion:<===\n', content)
-        elif len(matches2)>=3:
-            for m in matches2:
-                reply = reply.replace(''.join(m), '')
-                suggestions.append(m[1].strip())
-        elif matches3:
-            # assume only one match
-            replies = content.split(matches3[0])
-            reply = replies[0]
-            for r in replies[1:]:
-                match31 = re.findall(pattern31, r)
-                suggestions += [m[1].strip() for m in match31]
-                for m in match31:
-                    r = r.replace(''.join(m), '')
-                reply += r
-
-    return reply, suggestions
-
-def filter_suggestion(content:str):
-    pattern = r'\[?SUGGESTION\].*$'
-    content = '\n'.join(re.split(pattern, content, re.MULTILINE))
-    return content
-
-
-
-if __name__ == '__main__':
-    content = '''作为基于Transformer技术的AI助手，我有以下能力：
-
-1. 自然语言处理（NLP）：我可以理解和生成自然语言文本，并通过语义理解和语言生成技术来回答问题、提供信息和进行对话。
-
-2. 知识检索和推理：我可以从广泛的知识库中检索和提取信息，包括事实、定义、解释、统计数据等，并进行推理和逻辑推断。
-
-3. 问题解答和咨询：我可以回答各种AI相关的问题，包括机器学习、深度学习、计算机视觉、自然语言处理等领域，并提供咨询和建议。
-
-4. 数据标注和数据策略：作为星尘数据的AI助手，我可以帮助解答与数据标注和数据策略相关的问题，包括数据集的构建、标注质量控制、标注工具选择等方面。
-
-5. 提供相关资源和指导：如果我无法回答你的问题，我会建议你访问星尘数据的官方网站（stardust.ai），那里会有更多关于AI和数据领域的资源和指导。
-
-启发性问题:
-- 你能给我提供一些关于自然语言处理的应用领域吗？
-- 在数据标注过程中，如何确保标注质量？
-- 你能向我解释一下深度学习是如何工作的吗？'''
-    content, suggestion = parse_suggestions(content)
-    print(content)

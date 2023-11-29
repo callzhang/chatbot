@@ -63,7 +63,7 @@ with gr.Blocks(theme=random.choice(themes),
         # suggestion
         content = history[-1].get('content')
         suggestions = []
-        if model.SUGGESTION_TOKEN in content:
+        if utils.SUGGESTION_TOKEN in content:
             content, suggestions = controller.parse_suggestions(content)
             history[-1]['suggestions'] = suggestions
             history[-1]['content'] = content

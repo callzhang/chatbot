@@ -15,7 +15,6 @@ from dateutil.parser import parse
 
 global username
 
-SUGGESTION_TOKEN = '[SUGGESTION]'
 FINISH_TOKEN = '[DONE]'
 RETRY_TOKEN = '[RETRY]'
 TTS = '[TTS]'

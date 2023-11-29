@@ -64,8 +64,7 @@ class BingAI:
                 print('')
                 try:
                     suggestions = [r['text'] for r in response['item']['messages'][1]['suggestedResponses']]
-                    print(f'{model.SUGGESTION_TOKEN}:  {suggestions}')
-                    queue.append(f'{model.SUGGESTION_TOKEN}: {json.dumps(suggestions)}')
+                    queue.append(f'{utils.SUGGESTION_TOKEN}: {json.dumps(suggestions)}')
                 except:
                     if response['item']['result']['value'] == 'InvalidSession':
                         logging.error(response['item']['result']['message'])
