@@ -176,7 +176,7 @@ def parse_suggestions(content: str):
         return None, None
     reply = content
     suggestions = []
-    pattern = r'(\[.+\])' #fallback
+    # pattern = r'(\[.+\])' #fallback
     if SUGGESTION_TOKEN in content or '启发性问题:' in content:
         pattern1 = r'(\[SUGGESTION\]:\s?).*(\[.+\])'
         pattern2 = r'(\[SUGGESTION\]:\s?)(.{3,})'
@@ -209,18 +209,7 @@ def parse_suggestions(content: str):
                 reply += r
         if not suggestions:
             print(f'Failed to detect suggestion for content:\n{content}')
-    elif matches := re.findall(pattern, content, flags=re.DOTALL):
-        for m in matches:
-            reply = reply.replace(m, '')
-            p_tag = f'\[SUGGESTION\]:?'
-            tag = re.findall(p_tag, m)
-            for t in tag:
-                m = m.replace(t, '')
-            try:
-                suggestion = ast.literal_eval(m)
-                suggestions += suggestion
-            except:
-                print(f'Failed to parse suggestion for match:\n{m}')
+
     return reply, suggestions
 
 

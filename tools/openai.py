@@ -9,6 +9,7 @@ import streamlit as st
 from . import dialog, auth, model, apify, utils
 from openai import OpenAI
 from urllib.parse import urlparse
+from datetime import datetime
 
 DEBUG = st.secrets.debug
 STREAMING = st.secrets.streaming
@@ -75,6 +76,7 @@ def request_chat(task, data, header, queue=None):
     url = data.pop('url')
     file = data.pop('file') if 'file' in data else None
     stream = data['stream']
+    assert (stream and queue) or (not stream and queue is None), 'stream and queue must be both True or False'
     try:
         if not task == model.Task.GPT4V.value: # gpt-3.5, gpt-4
             # header['Content-Type'] = 'application/json'
@@ -95,7 +97,7 @@ def request_chat(task, data, header, queue=None):
         if queue:
             queue.put({model.SERVER_ERROR: '服务器超时'})
         return
-    if stream and queue is not None and response.ok:
+    if stream and response.ok:
         tool_results = []
         for line in response.iter_lines():
             if not line:
@@ -157,7 +159,7 @@ def request_chat(task, data, header, queue=None):
         return
     
 
-##--------------------信息检索+聊天------------------
+##--------------------信息检索------------------
 def chat_with_search(conversation:list, task:str):
     chat_history = conversation2history(conversation, guest=False, task=task)
     data = {
@@ -166,7 +168,10 @@ def chat_with_search(conversation:list, task:str):
         'temperature': temperature,
         'url': task_params[task]['url'],
         'model': task_params[task]['model'],
-        'tools': [{'type':'function', 'function': apify.function_google_search}]
+        'tools': [
+            {'type': 'function', 'function': apify.function_google_search},
+            {'type': 'function', 'function': apify.function_parse_web_content}
+        ]
     }
     header = {
         'Authorization': f'Bearer {auth.get_openai_key(task)}'
@@ -178,88 +183,124 @@ def chat_with_search(conversation:list, task:str):
     return queue
     
 def chat_with_search_actor(task, data, header, queue):
-    '''the thread runner for chat_with_search'''
+    '''the thread runner for chat_with_search
+    1. send assistant chat with tools enabled
+    2. get response that may contain tool commands, finish if no commands
+        a. if tool is google, do a google search and add search result to memory
+        b. if tool is parse_web, do a web parsing and add content to memory
+    3. ask assistant if it is enough to fulfill the request, 
+        a. if more tool command is issued, then the loop back → 2 
+        b. if assistant can answer the question directly, then output the content, finish chat
+    '''
     result = request_chat(task, data, header, queue)
-    
-    # web search
     if not result or not (tool_results := result[model.TOOL_RESULT]):
         queue.put(model.FINISH_TOKEN)
-        utils.logger.info(f'No function returned for "{data["messages"][-3]["content"]}"')
         return
-    search_results, also_asks = [], []
-    for name, func, kargs in get_function_calls(tool_results):
-        assert name == 'google_search'
-        message = f'🔍正在检索: {kargs["query"]}'
-        queue.put({model.STATUS: message})
-        search_result, also_ask = func(**kargs)
-        # print(f'🔍search result: \n\n{json.dumps(search_result, indent=2, ensure_ascii=False)}')
-        search_results += search_result
-        also_asks += also_ask
-    search_result_content = [f"[{r['title']}]({r['url']})" for r in search_results]
-    search_result_content = '\n'.join(search_result_content)
-    logging.info(search_result_content)
-    # queue.put(search_result_content)
     
-    # let the GPT do the decision, then parse the web content
-    for chat in data['messages']:
-        if chat['role'] == model.Role.user.name:
-            question = chat['content']
-    web_content = get_search_content(task, question, search_results, also_asks, queue)
-    # streaming the result using regular chat_stream
-    answer_question_with_search_result(task, question, also_asks, web_content, queue)
+    # memory
+    question = [chat['content'] for chat in data['messages'] if chat['role'] == model.Role.user.name][-1]
+    search_results, also_asks = [], []
+    new_info = True
+    while tool_results and new_info:
+        new_info = False
+        for name, func, kwargs in get_function_calls(tool_results):
+            if name == 'google_search':
+                message = f'🔍Searching: {kwargs["query"]}'
+                queue.put({model.STATUS: message})
+                search_result, also_ask = func(**kwargs)
+                search_results += search_result
+                also_asks += also_ask
+                new_info = True
+            elif name == 'parse_web_content':
+                url = kwargs["url"]
+                title = kwargs.get('title') or urlparse(url).hostname
+                target_search = [s for s in search_results if s['url'] == url or s['title'] == title]
+                if not target_search:
+                    target_search = {
+                        'title': title,
+                        'url': url
+                    }
+                    search_results.append(target_search)
+                else:
+                    target_search = target_search[0]
+                if target_search.get('content'):
+                    continue
+                web_content = func(**kwargs)
+                if not web_content:
+                    queue.put({model.STATUS: f'❌Cannot access: [{title}]({url})'})
+                    web_content = '无法访问该网页'
+                else:
+                    new_info = True
+                    size = utils.token_size(web_content)
+                    print(f'🔍Ingested web content: {title} with {size} tokens')
+                    web_content = utils.truncate_text(web_content, task_params[task]['max_web_content'])
+                    queue.put({model.STATUS: f'⏳Reading: [{title}]({url}), 共{size}tokens', model.HELP: web_content})
+                # write the result
+                target_search['content'] = web_content
+        info = '\n'.join([f"[{r['title']}]({r['content']})" for r in search_results if r.get('content')])
+        logging.info(info)
+
+        # parse the web content or answer the question
+        tool_results = explore_exploit(task, question, search_results, also_asks, tools=new_info, queue=queue)
+    # # streaming the result using regular chat_stream
+    # answer_question_with_search_result(task, question, also_asks, web_content, queue)
     # finish
     queue.put(model.FINISH_TOKEN)
 
-        
-def get_search_content(task, question, search_result, also_asks, queue):
-    
-    web_contents = []
-    visited = 0
-    while not web_contents and visited < len(search_result):
-        prompt = '请根据用户检索问题、相似用户问题、网络搜索结果，决定需要补充访问哪些搜索结果中的网站。在网络搜索结果中，“content”中的内容是已访问的网站内容，无需再次访问。如果“content”中已经注明无法访问，请不要再次访问。请注意：请根据信息判断最优网站，最多访问3个网站。'
-        query = f'''【用户检索问题】：{question}
-        【相似问题和答案】：{also_asks}
-        【网络搜索结果】：{search_result}'''
-        chat_history = [
-            {'role': model.Role.system.name, 'content': prompt},
-            {'role': model.Role.user.name, 'content': query}
-        ]
-        data = {
-            'messages': chat_history,
-            'url': task_params[task]['url'],
-            'model': task_params[task]['model'],
-            'temperature': temperature,
-            'stream': False,
-            'tools': [{'type':'function', 'function': apify.function_parse_web_content}]
-        }
-        header = {
-            'Authorization': f'Bearer {auth.get_openai_key(task)}'
-        }
-        queue.put({model.STATUS: '⏳正在决定访问网站'})
-        result = request_chat(task, data, header)
-        tool_results = result[model.TOOL_RESULT]
-        for name, func, args in get_function_calls(tool_results):
-            assert name == 'parse_web_content'
-            URL = args["url"]
-            title = args.get('title') or urlparse(URL).hostname
-            # 浏览信息
-            web_content = func(**args)
-            if not web_content:
-                queue.put({model.STATUS: f'❌无法访问: [{title}]({URL})'})
-                utils.logger.error(f'❌无法访问: [{title}]({URL})')
-                web_content = '无法访问'
-            else:
-                size = utils.token_size(web_content)
-                print(f'🔍Ingested web content: {title} with {size} tokens')
-                web_content = utils.truncate_text(web_content, task_params[task]['max_web_content'])
-                web_contents.append(web_content)
-                queue.put({model.STATUS: f'⏳正在阅读: [{title}]({URL}), 共{size}tokens', model.HELP: web_content})
-            # write the result
-            for search in search_result:
-                if search['url'] == URL:
-                    search['content'] = web_content
-            visited += 1
-    return web_contents
+
+
+def explore_exploit(task, question, search_results, also_asks, tools, queue):
+    prompt = f'''
+You are a knowledgeable assistant capable of answering any questions. Here's how to proceed:
+
+1. **Understand the User Question**: Review the user's question carefully.
+
+2. **Examine Provided Information**: 
+   - **Search Results**: Check the 'content' field of each provided search result for relevant information. There's no need to re-parse these contents.
+   - **Similar questions**: Review the provided questions and answers similar to the user's question.
+
+3. **Formulate Your Answer**: 
+   - If the provided information suffices, answer the question in the user question's language.
+   - If additional information is needed, you may request to parse up to three websites.
+
+4. **Citing Sources**: 
+   - If citing from search results, use the format [[NUMBER](URL)] at the end of the corresponding line, where NUMBER is the entry index and URL is the provided link.
+
+**Remember**:
+   - Avoid requesting to parse web entries with a 'content' field already existed.
+   - No need to request tool usage unless necessary.
+   - Today is {datetime.now()}
+'''
+    new_search_result = [s.copy() for s in search_results]
+    for s in new_search_result:
+        if s.get('content'):
+            s.pop('url')
+            print(f'pop url: {s["title"]}')
+    query = f'''[User Question]: {question}
+    [Similar questions]：{also_asks}
+    [Search results]：{new_search_result}'''
+    chat_history = [
+        {'role': model.Role.system.name, 'content': prompt},
+        {'role': model.Role.user.name, 'content': query}
+    ]
+    data = {
+        'messages': chat_history,
+        'url': task_params[task]['url'],
+        'model': task_params[task]['model'],
+        'temperature': temperature,
+        'stream': True,
+    }
+    if tools:
+        data['tools'] = [{'type':'function', 'function': apify.function_parse_web_content}]
+    header = {
+        'Authorization': f'Bearer {auth.get_openai_key(task)}'
+    }
+    queue.put({model.STATUS: '⏳thinking...'})
+    result = request_chat(task, data, header, queue)
+    if not result:
+        return None
+    tool_results = result.get(model.TOOL_RESULT)
+    return tool_results
     
 
 def answer_question_with_search_result(task, question, also_asks, web_content, queue):
@@ -304,7 +345,7 @@ def history2chat(history:list[dict]) -> list[list]:
 # convert AppMessage to OpenAI chat format
 def conversation2history(conversation:list[model.AppMessage], guest, task) -> list[dict]:
     max_length = 500 if guest else task_params[task]['max_tokens']
-    chat_history = [{k: c.dict()[k] for k in key2keep}
+    chat_history = [{k: c.model_dump()[k] for k in key2keep}
                     for c in conversation if c.role in roles2keep and c.content]
     while (l:=chat_len(chat_history)) > max_length and len(chat_history) > 1:
         if chat_history[0]['role'] in ['assistant', 'user']:

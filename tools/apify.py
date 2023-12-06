@@ -133,12 +133,15 @@ def parse_web_content(url, title=None):
         'Cache-Control': 'max-age=0',
     }
     # method 1: use newspaper parsing
-    article = Article(url, keep_article_html=True, browser_user_agent=headers['User-Agent'], headers=headers, verbose=True)
-    article.download()
-    article.parse()
+    try:
+        article = Article(url, keep_article_html=True, browser_user_agent=headers['User-Agent'], headers=headers, verbose=True)
+        article.download()
+        article.parse()
+    except:
+        print(f'Failed to download {url}!')
+        return ''
     title = article.title or title
     html = article.article_html
-    print(len(html))
     if len(html) < MIN_HTML_LEN:
         html = None
         

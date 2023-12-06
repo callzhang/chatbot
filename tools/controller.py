@@ -95,7 +95,7 @@ def show_streaming_message(message: Message, message_placeholder):
     if suggestions and last:
         suggestions = set(suggestions)
         for suggestion in suggestions:
-            message_placeholder.button('👉🏻'+suggestion[:30], help=suggestion,
+            message_placeholder.button('👉🏻'+utils.truncate_text(suggestion,30), help=suggestion,
                         on_click=gen_response, kwargs={'query': suggestion})
     # text content
     if content:
