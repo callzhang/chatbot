@@ -159,7 +159,7 @@ def new_dialog(username, dialog_title=None) -> str:
             datetime.now().isoformat(), # time
             dialog_title, # title
             dialog_title # sheet
-        ], index=1, value_input_option='USER_ENTERED')
+        ], index=2, value_input_option='USER_ENTERED')
     # create sheet
     new_dialog = history.spreadsheet.add_worksheet(dialog_title, 1, 1)
     new_dialog.append_row(DIALOG_HEADER)

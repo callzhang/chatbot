@@ -177,11 +177,11 @@ def parse_suggestions(content: str):
     reply = content
     suggestions = []
     # pattern = r'(\[.+\])' #fallback
-    if SUGGESTION_TOKEN in content or '启发性问题:' in content:
-        pattern1 = r'((\[SUGGESTION\]|启发性问题):\s*).*?(\[.+?\])'
-        pattern2 = r'((\[SUGGESTION\]|启发性问题):\s*)(.{5,})'
-        pattern3 = r'((\[SUGGESTION\]|启发性问题):\s*)'
-        pattern31 = r'(-\s|\d\.\s)(.+)'
+    if SUGGESTION_TOKEN in content or '启发性问题' in content:
+        pattern1 = r'((\[SUGGESTION\]|启发性问题)[:：]?\s*).*?(\[.+?\])'
+        pattern2 = r'((\[SUGGESTION\]|启发性问题)[:：]?\s*)(.{5,})'
+        pattern3 = r'((\[SUGGESTION\]|启发性问题)[:：]?\s*)'
+        pattern31 = r'(-\s|\d\.\s?)(.+)'
         matches1 = re.findall(pattern1, reply, re.DOTALL)
         matches2 = re.findall(pattern2, reply)
         matches3 = re.findall(pattern3, reply)
@@ -201,12 +201,11 @@ def parse_suggestions(content: str):
                 suggestions.append(m[2].strip())
         elif matches3:#匹配关键词
             # assume only one match
-            for m in matches3:
-                reply = reply.replace(m[0], '')
+            reply = reply.replace(matches3[0][0], '')
             contents = content.split(matches3[0][0])
             remove_lines = []
             for c in contents[1:]:
-                match31 = re.findall(pattern31, c)
+                match31 = re.findall(pattern31, c, re.MULTILINE)
                 suggestions += [m[1].strip() for m in match31]
                 remove_lines += [''.join(m) for m in match31]
             for s in remove_lines:
