@@ -178,35 +178,39 @@ def parse_suggestions(content: str):
     suggestions = []
     # pattern = r'(\[.+\])' #fallback
     if SUGGESTION_TOKEN in content or '启发性问题:' in content:
-        pattern1 = r'(\[SUGGESTION\]:\s?).*(\[.+\])'
-        pattern2 = r'(\[SUGGESTION\]:\s?)(.{3,})'
-        pattern3 = r'\[SUGGESTION\]|启发性问题:\s*'
+        pattern1 = r'((\[SUGGESTION\]|启发性问题):\s*).*?(\[.+?\])'
+        pattern2 = r'((\[SUGGESTION\]|启发性问题):\s*)(.{5,})'
+        pattern3 = r'((\[SUGGESTION\]|启发性问题):\s*)'
         pattern31 = r'(-\s|\d\.\s)(.+)'
-        matches1 = re.findall(pattern1, reply)
+        matches1 = re.findall(pattern1, reply, re.DOTALL)
         matches2 = re.findall(pattern2, reply)
         matches3 = re.findall(pattern3, reply)
-
-        if matches1:
+        if matches1:# 匹配[]所有内容
             for m in matches1:
-                reply = reply.replace(''.join(m), '')
+                # reply = reply.replace(''.join(m), '')
+                for c in m:
+                    reply = reply.replace(c, '')
                 try:
-                    suggestions += ast.literal_eval(m[1])
+                    suggestions += ast.literal_eval(m[2])
                 except:
                     print('==>Error parsing suggestion:<===\n', content)
-        elif len(matches2) >= 3:
+        elif len(matches2) >= 3:#匹配多行[SUGGESTION]:...
             for m in matches2:
-                reply = reply.replace(''.join(m), '')
-                suggestions.append(m[1].strip())
-        elif matches3:
+                for c in m:
+                    reply = reply.replace(c, '')
+                suggestions.append(m[2].strip())
+        elif matches3:#匹配关键词
             # assume only one match
-            replies = content.split(matches3[0])
-            reply = replies[0]
-            for r in replies[1:]:
-                match31 = re.findall(pattern31, r)
+            for m in matches3:
+                reply = reply.replace(m[0], '')
+            contents = content.split(matches3[0][0])
+            remove_lines = []
+            for c in contents[1:]:
+                match31 = re.findall(pattern31, c)
                 suggestions += [m[1].strip() for m in match31]
-                for m in match31:
-                    r = r.replace(''.join(m), '')
-                reply += r
+                remove_lines += [''.join(m) for m in match31]
+            for s in remove_lines:
+                reply = reply.replace(s, '')
         if not suggestions:
             print(f'Failed to detect suggestion for content:\n{content}')
 

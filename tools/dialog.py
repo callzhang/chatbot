@@ -42,7 +42,7 @@ search_prompt = {"role": "system", "content": f'如果用户的问题是常识�
 staff_prompt = lambda user: [{"role": "assistant", "content": f"你好，{user}，请问有什么可以帮助你？"}]
 guest_prompt = lambda user: [{"role": "system", "content": f'用户是访客，名字为{user}，请用非常精简的方式回答问题。'},
                              {'role': 'assistant', 'content': f'欢迎您，{user}！'}]
-TIME_FORMAT = '%Y-%m-%d(%H-%M)'
+TIME_FORMAT = '%Y-%m-%d_%H-%M-%S'
 
 
 # init dialog for UI
@@ -155,11 +155,11 @@ def new_dialog(username, dialog_title=None) -> str:
             print(f'dialog title {dialog_title} exists!')
             return dialog_title
     else:
-        history.append_row([
+        history.insert_row([
             datetime.now().isoformat(), # time
             dialog_title, # title
             dialog_title # sheet
-        ], value_input_option='USER_ENTERED')
+        ], index=1, value_input_option='USER_ENTERED')
     # create sheet
     new_dialog = history.spreadsheet.add_worksheet(dialog_title, 1, 1)
     new_dialog.append_row(DIALOG_HEADER)
