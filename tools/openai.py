@@ -24,7 +24,7 @@ task_params = {
         'max_web_content': 4000
     },
     model.Task.ChatGPT.value: {
-        'model': 'gpt-3.5-turbo', #'gpt-3.5-turbo',
+        'model': 'gpt-3.5-turbo-1106',  # 'gpt-3.5-turbo',
         'url': 'https://api.openai.com/v1/chat/completions',
         'max_tokens': 4000,
     },
@@ -206,8 +206,8 @@ def chat_with_search_actor(task, data, header, queue):
         for name, func, kwargs in get_function_calls(tool_results):
             if name == 'google_search':
                 message = f'🔍Searching: {kwargs["query"]}'
-                queue.put({model.STATUS: message})
                 search_result, also_ask = func(**kwargs)
+                queue.put({model.STATUS: message, model.HELP: list_dict2string(search_result)})
                 search_results += search_result
                 also_asks += also_ask
                 new_info = True
@@ -232,8 +232,10 @@ def chat_with_search_actor(task, data, header, queue):
                 else:
                     new_info = True
                     size = utils.token_size(web_content)
-                    print(f'🔍Ingested web content: {title} with {size} tokens')
-                    web_content = utils.truncate_text(web_content, task_params[task]['max_web_content'])
+                    if size > (max_len:=task_params[task]['max_web_content']):
+                        web_content = summarize_content(question, web_content, int(max_len/2), queue)
+                        size2 = utils.token_size(web_content)
+                        print(f'🔍Ingested web content: {title} with {size2} tokens (shortened from {size} tokens)')
                     queue.put({model.STATUS: f'⏳Reading: [{title}]({url}), 共{size}tokens', model.HELP: web_content})
                 # write the result
                 target_search['content'] = web_content
@@ -242,9 +244,7 @@ def chat_with_search_actor(task, data, header, queue):
 
         # parse the web content or answer the question
         tool_results = explore_exploit(task, question, search_results, also_asks, tools=new_info, queue=queue)
-    # # streaming the result using regular chat_stream
-    # answer_question_with_search_result(task, question, also_asks, web_content, queue)
-    # finish
+
     queue.put(model.FINISH_TOKEN)
 
 
@@ -273,7 +273,7 @@ You are a knowledgeable assistant capable of answering any questions. Here's how
 '''
     new_search_result = [s.copy() for s in search_results]
     for s in new_search_result:
-        if s.get('content'):
+        if s.get('content') and s.get('url'):
             s.pop('url')
             print(f'pop url: {s["title"]}')
     query = f'''[User Question]: {question}
@@ -290,6 +290,17 @@ You are a knowledgeable assistant capable of answering any questions. Here's how
         'temperature': temperature,
         'stream': True,
     }
+    # shorten the chat history if too long
+    while (ratio:=utils.token_size(str(chat_history)) / task_params[task]['max_tokens']) > 1:
+        new_search_result.sort(key=lambda x: utils.token_size(x.get('content')), reverse=True)
+        content = new_search_result[0]['content']
+        target_length = int(utils.token_size(content)/ratio/2)
+        # content2 = utils.truncate_text(content, target_length)
+        content2 = summarize_content(question, content, target_length, queue)
+        print(f'🔍Truncated chat history: {utils.token_size(content)} -> {utils.token_size(content2)}')
+        new_search_result[0]['content'] = content2
+        return explore_exploit(task, question, new_search_result, also_asks, tools, queue)
+    
     if tools:
         data['tools'] = [{'type':'function', 'function': apify.function_parse_web_content}]
     header = {
@@ -303,27 +314,51 @@ You are a knowledgeable assistant capable of answering any questions. Here's how
     return tool_results
     
 
-def answer_question_with_search_result(task, question, also_asks, web_content, queue):
-    prompt = '请根据用户问题和网页内容，总结网页信息，请尽量整理得详细一些，不要遗漏。并且总结一些观点并进行详细解答。内容长度至少500字。如果网页内容没有实质性信息，请回答信息量不够。'
-    query = f'''【用户问题】{question}
-    【相关问题】{';'.join(also_asks)}
-    【网页内容】{web_content}
+def summarize_content(question, content, max_words, queue):
+    prompt = '''The following is a user question and a web content. \
+        The content is too long for GPT to process.\
+        Please make summarization of the web content so that the new content \
+        only contains relavent information to the user's quetion. \
+        Please note: \
+        1. summarization should be no than {max_words} words. \
+        2. reply with the same language as the user question. \
+        3. the summarization should be in markdown format. \
+        4. reply with the summarization directly'''
+    max_tokens = task_params[model.Task.ChatGPT.value]['max_tokens']
+    queue.put({model.STATUS: f'🔍Ingest web content with {utils.token_size(content)} tokens'})
+    if (ratio:=utils.token_size(content) / max_tokens) > 1:
+        chunks, summarizes = [], []
+        n = int(ratio) + 1
+        max_words_t = int(max_words/n)
+        while utils.token_size(content) > 0:
+            content_t = utils.truncate_text(content, max_tokens)
+            chunks.append(content_t)
+            content = content[len(content_t):]
+            content_t = summarize_content(question, content_t, max_words_t, queue)
+            summarizes.append(content_t)
+        content2 = '\n\n'.join(summarizes)
+        return content2
+    query = f'''[User Question] {question}
+    [Web content] {content}
     '''
     chat_history = [
         {'role': model.Role.system.name, 'content': prompt},
-        dialog.suggestion_prompt,
         {'role': model.Role.user.name, 'content': query}
     ]
     data = {
         'messages': chat_history,
-        'url': task_params[task]['url'],
-        'model': task_params[task]['model'],
-        'stream': True,
+        'url': task_params[model.Task.ChatGPT.value]['url'],
+        'model': task_params[model.Task.ChatGPT.value]['model'],
+        'stream': False,
     }
     header = {
-        'Authorization': f'Bearer {auth.get_openai_key(task)}'
+        'Authorization': f'Bearer {auth.get_openai_key(model.Task.ChatGPT.value)}'
     }
-    request_chat(task, data, header, queue)
+    response = request_chat(model.Task.ChatGPT.value, data, header)
+    content2 = response['content']
+    print(f'🔍Summarized content: {utils.token_size(content)} -> {utils.token_size(content2)}')
+    content2 = utils.truncate_text(content2, max_words)
+    return content2
          
          
 #------------------UTILITIES-----------------
@@ -380,7 +415,10 @@ def chat_len(conversation):
     count = utils.token_size(chat_string)
     return count
 
-
+def list_dict2string(list_dictionary):
+    dict2str = lambda d: '\n'.join([f'{k}: {v}' for k, v in d.items()])
+    content = '\n\n---\n\n'.join([dict2str(d) for d in list_dictionary])
+    return content
 
 if __name__ == '__main__':
     # WIP: test gpt4v

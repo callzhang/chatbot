@@ -35,9 +35,12 @@ logger.addHandler(console_handler)
 
 ## token size
 tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
-def token_size(text):
+def token_size(text:str):
     if not text:
         return 0
+    if not isinstance(text, str):
+        text = str(text)
+        print(f'Warning: text is not str, converted to str: {text}')
     return len(tokenizer.encode(text))
 
 def truncate_text(text, max_len=1024):
