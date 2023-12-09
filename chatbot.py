@@ -193,6 +193,6 @@ from streamlit_extras.add_vertical_space import add_vertical_space
 from tools import components
 # buy me a coffee
 with st.sidebar:
-    components.display_sentry()
+    components.display_sentry_feedback()
     # button(username="derekz", floating=False, width=221)
 

@@ -2,12 +2,11 @@
 
 # my_component.py
 import streamlit.components.v1 as components
-
+import streamlit as st
+if 'name' not in st.session_state:
+    st.session_state.name = 'guest'
 # Define the component.
-
-def display_sentry():
-    components.html(
-        """
+content = f"""
 <head>
 <script
 src="https://browser.sentry-cdn.com/7.86.0/bundle.tracing.replay.feedback.min.js"
@@ -17,20 +16,32 @@ crossorigin="anonymous"
 </head>
 <body>
 <script>
-    Sentry.init({
-    dsn: "https://28eb6ea304b24c41a6ea6883121fe62f@o200299.ingest.sentry.io/1364811",
+    Sentry.init({{
+    dsn: "https://0e9ffdaf583b7b632cb67ade01839227@o200299.ingest.sentry.io/4506365834035200",
 
     integrations: [
-        new Sentry.Feedback({
+        new Sentry.Feedback({{
         // Additional SDK configuration goes in here, for example:
         // colorScheme: "light",
-        }),
+        showName: false,
+        showEmail: false,
+        buttonLabel: "提交反馈",
+        // useSentryUser" {{ username: {st.session_state.name} }}
+        }}),
     ],
-    });
+    }});
+    Sentry.setUser({{ 
+        username: "{st.session_state.name}",
+        ip_address: "{{{{auto}}}}",
+    }});
 </script>
 </body>
-        """,
-        height=600,
+"""
+def display_sentry_feedback():
+    components.html(
+        content,
+        height=300,
     )
 
-display_sentry()
+if __name__ == "__main__":
+    display_sentry_feedback()
