@@ -12,7 +12,7 @@ if 'name' not in st.session_state:
 
 # get history
 chat_history = dialog.get_history(st.session_state.name)
-chat_titles = chat_history['title']
+chat_titles = chat_history.col_values(2)[1:]
 if not len(chat_titles):
     st.info('暂无历史记录')
     st.stop()
@@ -27,3 +27,4 @@ if not chats:
     st.stop()
 chat_md = dialog.conversation2markdown(chats, title=selected_title)
 st.markdown(chat_md)
+st.download_button('下载聊天记录', data=chat_md.encode('utf-8'), file_name=f'{selected_title}.md', mime='text/markdown')

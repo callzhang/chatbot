@@ -74,7 +74,7 @@ with bing_tab:
         "value": "X=rebateson"
     },...
     '''
-    bingai_cookies = utils.get_bingai_key(st.session_state.name)
+    bingai_cookies = auth.get_bingai_key(st.session_state.name)
     bingai_cookies = st.text_area('请输入BingAI的cookies', placeholder=cookie_template,
                                   height=200, value=bingai_cookies, 
                                   help=bing_instruction)

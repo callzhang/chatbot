@@ -1,14 +1,12 @@
-import streamlit as st, pandas as pd
+import streamlit as st
 # from streamlit_chat import message
 from tools import dialog, utils, controller, model, auth, speech
-import time, json
 from datetime import datetime, timedelta
 # from streamlit_extras.colored_header import colored_header
 from streamlit_extras.buy_me_a_coffee import button
 import extra_streamlit_components as stx
-from rich.traceback import install
-install(show_locals=True, word_wrap=True)
-
+import sys
+runner = sys.modules["streamlit.runtime.scriptrunner.script_runner"]
 
 # 初始化
 Task = model.Task
@@ -26,7 +24,7 @@ st.set_page_config(page_title="💬星尘小助手", page_icon="💬",
     })
 st.title("💬星尘小助手") 
     
-## user auth
+# user auth
 if 'name' not in st.session_state:
     st.session_state.guest = True
     cm = stx.CookieManager()
@@ -44,15 +42,14 @@ if 'name' not in st.session_state:
     if code:
         user_db = auth.get_db()
         access_data = user_db.query('访问码==@code')
-        exp_date = datetime.now() + timedelta(days=10)
+        exp_date = datetime.now() + timedelta(days=10)# set cookie expire date to 10 days later
         if len(access_data):
-            st.session_state.name = access_data['姓名'].iloc[0]
+            st.session_state.name = access_data.index.values[0]
             expiration = access_data['截止日期'].iloc[0]
-            if datetime.now().date() < expiration:
+            if datetime.now().date() < expiration.date():
                 # login success
                 st.session_state.guest = False
-                if exp_date.date() > expiration:
-                    exp_date = datetime(expiration.year, expiration.month, expiration.day, 23, 59, 59)
+                exp_date = datetime(expiration.year, expiration.month, expiration.day, 23, 59, 59)
         else: #guest
             st.session_state.name = code
         cm.set(model.LOGIN_CODE, code, expires_at=exp_date)
@@ -119,8 +116,11 @@ user_input = st.chat_input(placeholder=help,
                            key='input_text',
                            disabled=disabled,
                            max_chars=max_chars,
-                           on_submit=controller.gen_response
+                        #    on_submit=controller.gen_response
                            )
+if user_input:
+    user_message, bot_response = controller.gen_response(user_input)
+    
 # 显示对话内容
 for i, message in enumerate(st.session_state.conversation):
     role, content, medias =  message.role, message.content, message.medias
@@ -148,8 +148,6 @@ for i, message in enumerate(st.session_state.conversation):
                 controller.play_audio(f, message_placeholder)
     else:
         raise Exception(f'Unknown role: {role}')
-        with st.chat_message('error'):
-            st.markdown(str(message))
 
     # page layout
     if st.session_state.desired_layout != 'wide' and message.role=='assistant' and utils.token_size(message.content) > WIDE_LAYOUT_THRESHOLD:

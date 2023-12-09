@@ -9,7 +9,7 @@ openai
 EdgeGPT
 transformers
 gradio
-shillelagh[all]
+# shillelagh[all]
 extra_streamlit_components
 apify_client
 beautifulsoup4
@@ -20,3 +20,4 @@ readability-lxml
 gspread-pandas
 python-dateutil
 oss2
+sentry-sdk

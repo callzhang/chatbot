@@ -1,9 +1,9 @@
+from gspread_pandas import Spread, Client
 import pandas as pd
 import streamlit as st
 import os, time
-from . import model, utils
+from . import model, utils, google_sheet
 from retry import retry
-
 
 ## 管理秘钥
 import json, toml
@@ -53,24 +53,17 @@ def get_apify_token():
         data = toml.load(f)
     return data.get('apify_token')
 
-## user auth
+## user table
+client = google_sheet.init_client()
 sheet_url = st.secrets["public_gsheets_url"]
-from shillelagh.backends.apsw.db import connect
-
-# user management
+# from shillelagh.backends.apsw.db import connect
 @utils.cached(timeout=600)
 @retry(tries=3, delay=2, backoff=2)
 def get_db():
-    msg = st.toast('正在连接数据库，请稍等...')
-    conn = connect(":memory:")
-    cursor = conn.cursor()
-    query = f'SELECT * FROM "{sheet_url}"'
-    rows = cursor.execute(query)
-    rows = rows.fetchall()
-    df = pd.DataFrame(rows, columns=['姓名', '访问码', '截止日期'])
-    msg.toast('数据库连接成功！')
-    print(f'Fetched {len(df)} records')
-    time.sleep(1)
+    db = Spread('星尘小助手用户', client=client)
+    df = db.sheet_to_df()
+    df['截止日期'] = pd.to_datetime(df['截止日期'])
+    print(f'Fetched {len(df)} user records')
     return df
 
 

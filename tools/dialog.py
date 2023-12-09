@@ -3,10 +3,10 @@ import os, logging, json, re
 from datetime import datetime
 from pathlib import Path
 import pandas as pd
-from . import model, utils
+from . import model, utils, google_sheet
 import streamlit as st
-from gspread_pandas import Spread, Client
 from gspread import Worksheet, Spreadsheet
+from gspread_pandas import Spread
 from streamlit.runtime.uploaded_file_manager import UploadedFile
 from functools import lru_cache
 
@@ -26,9 +26,7 @@ DIALOG_HEADER = ['role', 'name', 'content', 'time', 'task', 'suggestions', 'acti
 # |[AppMessage] |conversation | dialog      | 对话      |
 # | AppMessage  |   message   | row         | 消息      |
 
-key = json.loads(st.secrets.gsecret.replace("'",'"'))
-client = Client(config=key)
-
+client = google_sheet.init_client()
 
 # init prompt
 system_prompt = [
@@ -100,8 +98,8 @@ def append_dialog(username, title, message:model.AppMessage):
 # get messages from a dialog
 def get_messages(username, title):
     '''get messages used for UI'''
-    dialog = get_dialog(username, title)
-    records = dialog.get_records(value_render_option='FORMULA')
+    dialog_sheet = get_dialog(username, title)
+    records = dialog_sheet.get_records(value_render_option='FORMULA')
     # convert to Message object
     messages = []
     for c in records:
@@ -149,17 +147,18 @@ def new_dialog(username, dialog_title=None) -> str:
     if not dialog_title:
         dialog_title = datetime.now().strftime(TIME_FORMAT)
     history = get_history(username)
+    all_historys = history.col_values(2)[1:]
     if dialog_title in history.col_values(2):
         all_sheets = [s.title for s in history.spreadsheet.worksheets()]
         if dialog_title in all_sheets:
             print(f'dialog title {dialog_title} exists!')
             return dialog_title
     else:
-        history.insert_row([
-            datetime.now().isoformat(), # time
-            dialog_title, # title
-            dialog_title # sheet
-        ], index=2, value_input_option='USER_ENTERED')
+        row = [datetime.now().isoformat(), dialog_title, dialog_title]
+        if not all_historys:
+            history.append_row(row, value_input_option='USER_ENTERED')
+        else:
+            history.insert_row(row, index=2, value_input_option='USER_ENTERED')
     # create sheet
     new_dialog = history.spreadsheet.add_worksheet(dialog_title, 1, 1)
     new_dialog.append_row(DIALOG_HEADER)
