@@ -47,6 +47,7 @@ def text_to_speech(input_text, output_file=None, voice='nova', speed=1.2) -> Byt
         output_file = BytesIO()
     config = task_params[model.Task.TTS.value]
     
+    t = time()
     try:
         response = client.audio.speech.create(
             model=config['model'],
@@ -57,13 +58,12 @@ def text_to_speech(input_text, output_file=None, voice='nova', speed=1.2) -> Byt
         )
     except openai.RateLimitError as e:
         st.error(e)
-    t = time()
     if isinstance(output_file, str):
         response.stream_to_file(output_file)
     elif isinstance(output_file, BytesIO):
         for chunk in response.iter_bytes():
             output_file.write(chunk)
-    print(f'saving took {time()-t} seconds')
+    print(f'TTS took {time()-t:.1f} seconds')
     return output_file
     
 # play in the background
