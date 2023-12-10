@@ -101,7 +101,6 @@ def update_message(username, title, message:model.AppMessage, create=False):
         for i, (v0, v1) in enumerate(zip(row_values, message_value)):
             if v0 != v1:
                 dialog.update_cell(row=row_index, col=i+1, value=v1)
-    return res
 
 
 # get messages from a dialog
