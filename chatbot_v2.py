@@ -53,7 +53,7 @@ with gr.Blocks(theme=random.choice(themes),
             # timeout
             if time.time() - start > model.TIMEOUT:
                 chatbot[-1][1] += '\n抱歉出了点问题，请重试...'
-                actions.update({'重试': model.RETRY_TOKEN})
+                actions.update({'重试': model.RETRY_ACTION})
                 history[-1]['actions'] = actions
                 receiving = False
                 yield '', history, chatbot
@@ -74,7 +74,7 @@ with gr.Blocks(theme=random.choice(themes),
         actions = history[-1].get('actions')
         if actions:
             for title, action in actions.items():
-                if action == model.RETRY_TOKEN:
+                if action == model.RETRY_ACTION:
                     action_btns.append(gr.Button.update(value=title, visible=True))
             
         action_btns += [gr.Button.update(visible=False) for i in range(10-len(suggestions))]

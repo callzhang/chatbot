@@ -131,12 +131,16 @@ for i, message in enumerate(st.session_state.conversation):
             st.markdown(content)
     elif role == Role.user.name:
         if content or medias:
-            with st.chat_message(role):
-                if medias:
-                    for media in medias:
-                        controller.display_media(media)
-                if content:
-                    st.markdown(content)
+            message_placeholder = st.chat_message(role)
+            if medias:
+                for media in medias:
+                    controller.display_media(media, container=message_placeholder)
+            if content:
+                message_placeholder.markdown(content)
+        if i == len(st.session_state.conversation) - 2:
+            message_placeholder.button('✍🏼', help='重新输入', on_click=controller.handle_action, args=(
+                model.MODIFY_ACTION, message_placeholder))
+            
     elif role == Role.assistant.name:
         message_placeholder =  st.chat_message(role)
         controller.show_streaming_message(message, message_placeholder)

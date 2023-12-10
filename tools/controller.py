@@ -46,7 +46,7 @@ def show_streaming_message(message: Message, message_placeholder):
                 elif isinstance(item, dict):  # network error
                     if v := item.get(model.SERVER_ERROR):
                         message.content += f'\n\n{v}'
-                        message.actions = {model.RETRY_TOKEN: '重试'}
+                        message.actions = {model.RETRY_ACTION: '重试'}
                         finish_reply(message)
                     elif functions := item.get(model.TOOL_RESULT):
                         # message.content += f'```{json.dumps(v, indent=2, ensure_ascii=False)}```'
@@ -63,7 +63,7 @@ def show_streaming_message(message: Message, message_placeholder):
             # 超时
             if (datetime.now() - message.time).total_seconds() > model.TIMEOUT:
                 message.content += '\n\n请求超时，请重试...'
-                message.actions = {model.RETRY_TOKEN: '重试'}
+                message.actions = {model.RETRY_ACTION: '重试'}
                 finish_reply(message)
                 break
             # 渲染
@@ -105,6 +105,7 @@ def show_streaming_message(message: Message, message_placeholder):
         for action, text in actions.items():
             message_placeholder.button(
                 text, on_click=handle_action, args=(action,))
+        
 
 ## 对输入进行应答
 def gen_response(query=None):
@@ -134,7 +135,7 @@ def gen_response(query=None):
     )
     # display and update db
     st.session_state.conversation.append(query_message)
-    dialog.append_dialog(st.session_state.name, st.session_state.selected_title, query_message)
+    dialog.new_message(st.session_state.name, st.session_state.selected_title, query_message)
 
     # response
     print(f'Start task({task}): {st.session_state.conversation[-1].content}')
@@ -239,13 +240,25 @@ def gen_response(query=None):
     return query_message, bot_response
 
 
-def handle_action(action_token):
-    if action_token == model.RETRY_TOKEN:
-        bot_response = st.session_state.conversation.pop(-1)
-        user_prompt = st.session_state.conversation.pop(-1)
+def handle_action(action_token, *args):
+    if action_token == model.RETRY_ACTION:
+        bot_response = delete_last_message()
+        user_prompt = delete_last_message()
         if bot_response.role == Role.assistant.name and user_prompt.role == Role.user.name:
             user_input = user_prompt.content
             gen_response(query=user_input)
+    if action_token == model.MODIFY_ACTION:
+        bot_response = delete_last_message()
+        user_prompt = delete_last_message()
+        if bot_response.role == Role.assistant.name and user_prompt.role == Role.user.name:
+            user_input = user_prompt.content
+            # st.session_state.input_text = user_input
+            container = args[0]
+            def update_input():
+                new_input = st.session_state.new_input
+                if new_input and new_input != user_input:
+                    gen_response(new_input)
+            container.text_input('New Input:', value=user_input, on_change=update_input, key='new_input')
     else:
         raise NotImplementedError(action_token)
     
@@ -266,7 +279,7 @@ def play_audio(bobj, container=None, autoplay=False):
     
 def finish_reply(message):
     message.queue = None
-    dialog.append_dialog(st.session_state.name, st.session_state.selected_title, message)
+    dialog.new_message(st.session_state.name, st.session_state.selected_title, message)
     print('-'*50)
     
 
@@ -292,3 +305,7 @@ def call_functions(message):
     queue = message.queue
     
     
+def delete_last_message():
+    msg = st.session_state.conversation.pop(-1)
+    dialog.delete_message(st.session_state.name, st.session_state.selected_title, msg)
+    return msg

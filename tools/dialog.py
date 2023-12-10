@@ -74,8 +74,8 @@ def init_dialog(username):
     return st.session_state.conversation
 
 
-## conversation: list[Message] -> chat: dict -> save to file
-def append_dialog(username, title, message:model.AppMessage):
+## message
+def new_message(username, title, message:model.AppMessage):
     from .controller import openai_image_types
     dialog = get_dialog(username, title)
     # create chat entry as a dict
@@ -111,7 +111,13 @@ def get_messages(username, title):
     return messages
 
 
+def delete_message(username, title, message_id):
+    dialog = get_dialog(username, title)
+    dialog.delete_rows(dialog.row_count)
+    
+
 # dialog
+@utils.cached(timeout=7200)
 def get_dialog(username:str, title:str) -> Worksheet:
     '''Find the dialog file from history
     :param username: the user to search for
