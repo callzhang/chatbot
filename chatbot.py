@@ -144,12 +144,6 @@ for i, message in enumerate(st.session_state.conversation):
     elif role == Role.assistant.name:
         message_placeholder =  st.chat_message(role)
         controller.show_streaming_message(message, message_placeholder)
-        # append tts action
-        if not st.session_state.guest and i == len(st.session_state.conversation)-1 and content:
-            if message_placeholder.button('▶️'):
-                st.toast('▶️正在转译语音')
-                f = speech.text_to_speech(message.content)
-                controller.play_audio(f, message_placeholder)
     else:
         raise Exception(f'Unknown role: {role}')
 

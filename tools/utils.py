@@ -34,7 +34,7 @@ logger.addHandler(file_handler)
 logger.addHandler(console_handler)
 
 ## token size
-tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
+tokenizer = GPT2Tokenizer.from_pretrained("gpt2", local_files_only=True) # local_files_only?
 def token_size(text:str):
     if not text:
         return 0
@@ -145,12 +145,16 @@ def excel_num_to_datetime(excel_num):
 
 
 # oss
-def save_uri_to_oss(uri:str|BytesIO, prefix=''):
+from streamlit.runtime.uploaded_file_manager import UploadedFile
+def save_uri_to_oss(uri:str|UploadedFile, prefix=''):
     if prefix and prefix.endswith('/'):
         prefix += '/'
-    if isinstance(uri, BytesIO):
-        file_content = uri.getvalue()
-        object_name = f'tts_{datetime.now()}.mp3'
+    if isinstance(uri, UploadedFile):
+        fileObj = uri
+        file_content = fileObj.getvalue()
+        file_name = fileObj.name
+        file_type = fileObj.type.split('/')[-1]
+        object_name = f'{file_name}.{file_type}'
     elif isinstance(uri, str):
         assert endpoint not in uri, f'Double upload: {uri}, please check your code!'
         object_name, mime = parse_file_info(uri)
@@ -169,6 +173,7 @@ def save_uri_to_oss(uri:str|BytesIO, prefix=''):
     bucket.put_object(object_path, file_content)
     # http://stardust-public.oss-cn-hangzhou.aliyuncs.com/data/mart/5fb60bfa-43f6-44e7-94c0-8683eb9ee99a.jpeg
     oss_url = f"https://{bucket_name}.{endpoint}/{object_path}"
+    print(f'Uploaded to OSS: {oss_url}')
     return oss_url, file_content
 
 

@@ -5,7 +5,7 @@ from pathlib import Path
 import pandas as pd
 from . import model, utils, google_sheet
 import streamlit as st
-from gspread import Worksheet, Spreadsheet
+from gspread import Worksheet, Spreadsheet, utils as gutils
 from gspread_pandas import Spread
 from streamlit.runtime.uploaded_file_manager import UploadedFile
 from functools import lru_cache
@@ -75,7 +75,7 @@ def init_dialog(username):
 
 
 ## message
-def new_message(username, title, message:model.AppMessage):
+def update_message(username, title, message:model.AppMessage, create=False):
     from .controller import openai_image_types
     dialog = get_dialog(username, title)
     # create chat entry as a dict
@@ -92,8 +92,17 @@ def new_message(username, title, message:model.AppMessage):
         else:
             message_dict['medias'] = media_uri_list
     message_value = convert_update_value(message_dict)
-    res = dialog.append_row(message_value, value_input_option='USER_ENTERED')
+    if create:
+        res = dialog.append_row(message_value, value_input_option='USER_ENTERED')
+    else:
+        row_index = dialog.find(message.content, in_column=DIALOG_HEADER.index('content')+1).row
+        row_values = dialog.row_values(row_index)
+        # we cannot update the whole row, google api will raise error, probably due to large content of `status`
+        for i, (v0, v1) in enumerate(zip(row_values, message_value)):
+            if v0 != v1:
+                dialog.update_cell(row=row_index, col=i+1, value=v1)
     return res
+
 
 # get messages from a dialog
 def get_messages(username, title):
@@ -111,9 +120,11 @@ def get_messages(username, title):
     return messages
 
 
-def delete_message(username, title, message_id):
+def delete_message(username, title, row_num=None):
     dialog = get_dialog(username, title)
-    dialog.delete_rows(dialog.row_count)
+    row_num = row_num or dialog.row_count
+    dialog.delete_rows(row_num)
+    
     
 
 # dialog
@@ -201,7 +212,7 @@ def delete_dialog(username, title):
 
 
 def convert_update_value(record: dict):
-    message_value = [(str(record[k]) if k in record and record[k] else None) or None for k in DIALOG_HEADER]
+    message_value = [str(record[k]) if k in record and record[k] else '' for k in DIALOG_HEADER]
     return message_value
 
 ## file attachment, convert to local file when saving

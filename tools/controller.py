@@ -86,7 +86,7 @@ def show_streaming_message(message: Message, message_placeholder):
     suggestions = message.suggestions
     if medias:
         for media in medias:
-            display_media(media, container=message_placeholder, autoplay=last)
+            display_media(media, container=message_placeholder)
     # suggestion
     if not suggestions:
         content, suggestions = utils.parse_suggestions(content)
@@ -105,6 +105,20 @@ def show_streaming_message(message: Message, message_placeholder):
         for action, text in actions.items():
             message_placeholder.button(
                 text, on_click=handle_action, args=(action,))
+    if last and not message.medias and message.content:
+        if message_placeholder.button('🔈', help='朗读'):
+            st.toast('▶️正在转译语音')
+            data = speech.text_to_speech(message.content)
+            rec = UploadedFileRec(
+                file_id=message.content[:20],
+                name=message.content[:20],
+                type='audio/mp3',
+                data=data.getvalue(),
+            )
+            voice = UploadedFile(rec, None)
+            message.medias = model.AppMessage.set_medias(voice)
+            dialog.update_message(st.session_state.name, st.session_state.selected_title, message, create=False)
+            play_audio(voice, message_placeholder, autoplay=True)
         
 
 ## 对输入进行应答
@@ -135,7 +149,7 @@ def gen_response(query=None):
     )
     # display and update db
     st.session_state.conversation.append(query_message)
-    dialog.new_message(st.session_state.name, st.session_state.selected_title, query_message)
+    dialog.update_message(st.session_state.name, st.session_state.selected_title, query_message, create=True)
 
     # response
     print(f'Start task({task}): {st.session_state.conversation[-1].content}')
@@ -262,9 +276,10 @@ def handle_action(action_token, *args):
     else:
         raise NotImplementedError(action_token)
     
-def play_audio(bobj, container=None, autoplay=False):
-    bobj.seek(0)
-    b64_audio = base64.b64encode(bobj.read()).decode()
+
+from io import BytesIO
+def play_audio(bobj:BytesIO, container=None, autoplay=False):
+    b64_audio = base64.b64encode(bobj.getvalue()).decode()
     autoplay_tag = 'autoplay' if autoplay else ''
     audio_html = f"""
     <audio controls {autoplay_tag}>
@@ -279,25 +294,20 @@ def play_audio(bobj, container=None, autoplay=False):
     
 def finish_reply(message):
     message.queue = None
-    dialog.new_message(st.session_state.name, st.session_state.selected_title, message)
+    dialog.update_message(st.session_state.name, st.session_state.selected_title, message, create=True)
     print('-'*50)
     
 
-def display_media(media, container=st, autoplay=False):
+def display_media(media, container=st):
     media_type = media.type.split('/')[0]
     if media.type in openai_image_types or media_type == model.MediaType.image.name:
-        media_type == model.MediaType.image
         container.image(media, use_column_width='always')
     elif media.type in speech_media_types or media_type == model.MediaType.audio.name:
-        media_type == model.MediaType.audio
-        # st.audio(media)
-        play_audio(media, container=container, autoplay=autoplay)
+        play_audio(media, container=container)
     elif media.type == 'mp4' or media_type == model.MediaType.video.name:
-        media_type == model.MediaType.video
         container.video(media)
     else:
         raise NotImplementedError(media.tpye)
-    return media_type
 
 
 def call_functions(message):
@@ -307,5 +317,5 @@ def call_functions(message):
     
 def delete_last_message():
     msg = st.session_state.conversation.pop(-1)
-    dialog.delete_message(st.session_state.name, st.session_state.selected_title, msg)
+    dialog.delete_message(st.session_state.name, st.session_state.selected_title)
     return msg

@@ -4,12 +4,9 @@ from enum import Enum, unique
 from queue import Queue
 from datetime import datetime, timedelta
 from streamlit.runtime.uploaded_file_manager import UploadedFile, UploadedFileRec
-from io import BytesIO
 import requests, os, logging, mimetypes, re
 from pydantic.dataclasses import dataclass # not useful as it cannot check arbitrary types
 from pydantic import BaseModel, validator
-from threading import Thread
-from pathlib import PosixPath
 from .utils import parse_file_info, excel_num_to_datetime, endpoint, save_uri_to_oss
 from dateutil.parser import parse
 
@@ -130,7 +127,8 @@ class AppMessage(BaseModel):
                     media_list = []
         elif isinstance(media_object, list):
             media_list = media_object
-        elif isinstance(media_object, BytesIO):
+        elif isinstance(media_object, UploadedFile):
+            assert media_object.type, 'file_type not set'
             media_list = [media_object]
         else:
             raise Exception(f'Unknown media type: {type(m)}')
@@ -139,19 +137,18 @@ class AppMessage(BaseModel):
         for m in media_list:
             if isinstance(m, str):
                 # url, download to local file
-                if m.startswith('http'):
-                    if endpoint in m: # already on OSS
-                        res = requests.get(m)
+                url = m
+                if url.startswith('http'):
+                    if endpoint in url:  # already on OSS
+                        res = requests.get(url)
                         if res.ok:
                             data = res.content
-                            uri = m
+                            url = url
                         else:
                             print(f'Unable to download url: {m}')
                             continue
                     else: # upload to oss
-                        uri, data = save_uri_to_oss(m)
-                # elif os.path.exists(m):
-                #     data = open(m, 'rb').read()
+                        url, data = save_uri_to_oss(url)
                 else:
                     raise Exception(f'Unknown media url or file not found: {m}')
                 filename, filetype = parse_file_info(m)
@@ -161,21 +158,11 @@ class AppMessage(BaseModel):
                     type=filetype,
                     data=data,
                 )
-                medias.append(UploadedFile(rec, uri))
-            # elif isinstance(m, PosixPath) and os.path.exists(m):
-            #     data = open(m, 'rb').read()
-            #     filename, filetype = parse_file_info(m)
-            #     rec = UploadedFileRec(
-            #         file_id=str(m),
-            #         name=filename,
-            #         type=filetype,
-            #         data=data,
-            #     )
-            #     medias.append(UploadedFile(rec, m))
+                medias.append(UploadedFile(rec, url))
             elif isinstance(m, UploadedFile):
                 if not m._file_urls:
-                    uri, data = save_uri_to_oss(m)
-                    m._file_urls = uri
+                    url, data = save_uri_to_oss(m)
+                    m._file_urls = url
                 medias.append(m)
             else:
                 raise Exception(f'Unknown media: {m}')
