@@ -34,7 +34,7 @@ logger.addHandler(file_handler)
 logger.addHandler(console_handler)
 
 ## token size
-tokenizer = GPT2Tokenizer.from_pretrained("gpt2", local_files_only=True) # local_files_only?
+tokenizer = GPT2Tokenizer.from_pretrained("gpt2") # local_files_only?
 def token_size(text:str):
     if not text:
         return 0

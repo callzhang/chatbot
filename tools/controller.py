@@ -89,14 +89,13 @@ def show_streaming_message(message: Message, message_placeholder):
 
     # media
     content = message.content
-    suggestions = message.suggestions
     if medias:
         for media in medias:
             display_media(media, container=message_placeholder)
     # suggestion
-    if not suggestions:
+    if suggestions := message.suggestions:
         content, suggestions = utils.parse_suggestions(content)
-        if suggestions != message.suggestions:
+        if suggestions != message.suggestions and content != message.content:
             message.suggestions = suggestions
             message.content = content
             dialog.update_message(st.session_state.name, st.session_state.selected_title, message)
@@ -130,7 +129,7 @@ def show_actions(message: Message, message_placeholder):
     if actions:
         action_spacing = [0.1]*len(actions) + [1-0.1*len(actions)]
         for col, action in zip(message_placeholder.columns(action_spacing), actions):
-            col.button(action['label'], help=action['help'], key=f'{action["action"]}{i}', on_click=handle_action, kwargs=action)
+            col.button(action['label'], help=action['help'], key=f'{action["action"]}-{i}', on_click=handle_action, kwargs=action)
         
 
 ## 对输入进行应答

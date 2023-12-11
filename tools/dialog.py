@@ -97,7 +97,7 @@ def update_message(username, title, message:model.AppMessage, create=False):
         res = dialog.append_row(message_value, value_input_option='USER_ENTERED')
     else:
         try:
-            time_str = message.time.strftime('%Y-%m-%d %H:%M:%S')
+            time_str = message.time.strftime('%Y-%m-%d %I:%M:%S')
             time_col = DIALOG_HEADER.index('time')+1
             row_index = dialog.find(time_str, in_column=time_col).row
         except Exception as e:
@@ -110,9 +110,13 @@ def update_message(username, title, message:model.AppMessage, create=False):
                 logging.error(f'Cannot find message: {time_str}<->{dialog.col_values(time_col)}')
                 return
         row_values = dialog.row_values(row_index)
+        if row_values[0] != message_value[0]:
+            logging.error(f'Value mismatch: \n{row_values}\n{message_value}')
+            return
         # we cannot update the whole row, google api will raise error, probably due to large content of `status`
-        for i, (v0, v1) in enumerate(zip(row_values, message_value)):
-            if v0 != v1:
+        from itertools import zip_longest
+        for i, (v0, v1) in enumerate(zip_longest(row_values, message_value)):
+            if v0 != v1 and i != 3 and v1:
                 dialog.update_cell(row=row_index, col=i+1, value=v1)
 
 
