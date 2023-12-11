@@ -13,10 +13,6 @@ from dateutil.parser import parse
 global username
 
 FINISH_TOKEN = '[DONE]'
-RETRY_ACTION = '[RETRY]'
-MODIFY_ACTION = '[MODIFY]'
-TTS = '[TTS]'
-ACTIONS = [RETRY_ACTION, TTS]
 TIMEOUT = 60
 LOGIN_CODE = 'login_code'
 SERVER_ERROR = '[SERVER_ERROR]'

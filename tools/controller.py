@@ -25,6 +25,12 @@ task_params = {
     model.Task.TTS.value: speech.task_params
 }
 
+RETRY_ACTION = '[RETRY]'
+MODIFY_ACTION = '[MODIFY]'
+SPEAK_ACTION = '[SPEAK_ACTION]'
+DELETE_ACTION = '[DELETE_ACTION]'
+ACTIONS = [RETRY_ACTION, SPEAK_ACTION, MODIFY_ACTION]
+
 ## display assistant message
 def show_streaming_message(message: Message, message_placeholder):
     i = st.session_state.conversation.index(message)
@@ -46,7 +52,7 @@ def show_streaming_message(message: Message, message_placeholder):
                 elif isinstance(item, dict):  # network error
                     if v := item.get(model.SERVER_ERROR):
                         message.content += f'\n\n{v}'
-                        message.actions = {model.RETRY_ACTION: '重试'}
+                        message.actions = {RETRY_ACTION: '重试'}
                         finish_reply(message)
                     elif functions := item.get(model.TOOL_RESULT):
                         # message.content += f'```{json.dumps(v, indent=2, ensure_ascii=False)}```'
@@ -63,7 +69,7 @@ def show_streaming_message(message: Message, message_placeholder):
             # 超时
             if (datetime.now() - message.time).total_seconds() > model.TIMEOUT:
                 message.content += '\n\n请求超时，请重试...'
-                message.actions = {model.RETRY_ACTION: '重试'}
+                message.actions = {RETRY_ACTION: '重试'}
                 finish_reply(message)
                 break
             # 渲染
@@ -90,7 +96,7 @@ def show_streaming_message(message: Message, message_placeholder):
     # suggestion
     if not suggestions:
         content, suggestions = utils.parse_suggestions(content)
-        if suggestion != message.suggestions:
+        if suggestions != message.suggestions:
             message.suggestions = suggestions
             message.content = content
             dialog.update_message(st.session_state.name, st.session_state.selected_title, message)
@@ -102,25 +108,29 @@ def show_streaming_message(message: Message, message_placeholder):
     # text content
     if content:
         text_placeholder.markdown(content)
+    
+def show_actions(message: Message, message_placeholder):
+    i = st.session_state.conversation.index(message)
+    last = i == len(st.session_state.conversation) - 1
+    modify = (i == len(st.session_state.conversation) - 2) and (message.role == Role.user.name)
     # actions: only "retry" is supported
-    if (actions := message.actions) and last:
-        for action, text in actions.items():
-            message_placeholder.button(
-                text, on_click=handle_action, args=(action,))
-    if last and not message.medias and message.content:
-        if message_placeholder.button('🔈', help='朗读'):
-            st.toast('▶️正在转译语音')
-            data = speech.text_to_speech(message.content)
-            rec = UploadedFileRec(
-                file_id=message.content[:20],
-                name=message.content[:20],
-                type='audio/mp3',
-                data=data.getvalue(),
-            )
-            voice = UploadedFile(rec, None)
-            message.medias = model.AppMessage.set_medias(voice)
-            dialog.update_message(st.session_state.name, st.session_state.selected_title, message, create=False)
-            play_audio(voice, message_placeholder, autoplay=True)
+    actions = message.actions or []
+    if message.content and message.role==Role.assistant.name:
+        actions.append({'action': SPEAK_ACTION, 'label':'🔈', 'autoplay': True,
+                        'help': '朗读', 'container': message_placeholder, 'message': message})
+    if last:
+        actions.append({'action': RETRY_ACTION, 'label': '🔁',
+                        'help': '重新生成', 'container': message_placeholder})
+        actions.append({'action': DELETE_ACTION, 'label': '❌', 'help': '删除',
+                        'container': message_placeholder})
+    if modify:
+        actions.append({'action': MODIFY_ACTION, 'label': '✍🏼',
+                        'help': '修改', 'container': message_placeholder})
+    
+    if actions:
+        action_spacing = [0.1]*len(actions) + [1-0.1*len(actions)]
+        for col, action in zip(message_placeholder.columns(action_spacing), actions):
+            col.button(action['label'], help=action['help'], key=f'{action["action"]}{i}', on_click=handle_action, kwargs=action)
         
 
 ## 对输入进行应答
@@ -256,27 +266,42 @@ def gen_response(query=None):
     return query_message, bot_response
 
 
-def handle_action(action_token, *args):
-    if action_token == model.RETRY_ACTION:
+def handle_action(action, **kwargs):
+    container = kwargs['container']
+    if action == RETRY_ACTION:
         bot_response = delete_last_message()
         user_prompt = delete_last_message()
         if bot_response.role == Role.assistant.name and user_prompt.role == Role.user.name:
             user_input = user_prompt.content
             gen_response(query=user_input)
-    if action_token == model.MODIFY_ACTION:
+    elif action == MODIFY_ACTION:
         bot_response = delete_last_message()
         user_prompt = delete_last_message()
         if bot_response.role == Role.assistant.name and user_prompt.role == Role.user.name:
             user_input = user_prompt.content
-            # st.session_state.input_text = user_input
-            container = args[0]
             def update_input():
                 new_input = st.session_state.new_input
                 if new_input and new_input != user_input:
                     gen_response(new_input)
             container.text_input('New Input:', value=user_input, on_change=update_input, key='new_input')
+    elif action == SPEAK_ACTION:
+        message = kwargs['message']
+        with container.status('▶️正在转译语音'):
+            st.text('转录中...')
+            data = speech.text_to_speech(message.content)
+            rec = UploadedFileRec(
+                file_id=message.content[:20],
+                name=message.content[:20],
+                type='audio/mp3',
+                data=data.getvalue(),
+            )
+            voice = UploadedFile(rec, None)
+            message.medias = model.AppMessage.set_medias(voice)
+            play_audio(voice, container, autoplay=kwargs['autoplay'])
+            st.text('保存中...')
+            dialog.update_message(st.session_state.name, st.session_state.selected_title, message, create=False)
     else:
-        raise NotImplementedError(action_token)
+        raise NotImplementedError(action)
     
 
 from io import BytesIO

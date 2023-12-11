@@ -64,9 +64,10 @@ task = st.selectbox('选择功能', Task.values(), key='task', label_visibility=
 # 聊天历史列表
 def on_conversation_change():
     del st.session_state.conversation
-    
+dialog_index = st.session_state.dialog_history.index(st.session_state.selected_title)
 st.session_state.selected_title = st.sidebar.radio('聊天历史', 
-                                  st.session_state.dialog_history, 0, 
+                                  st.session_state.dialog_history, 
+                                  index=dialog_index,
                                   key='chat_title_selection', 
                                   on_change=on_conversation_change)
 
@@ -124,28 +125,28 @@ if user_input:
 # 显示对话内容
 for i, message in enumerate(st.session_state.conversation):
     role, content, medias =  message.role, message.content, message.medias
+    message_placeholder = None
     if role == Role.system.name:
         pass
     elif role == Role.server.name:# not implemented
-        with st.chat_message(role):
-            st.markdown(content)
+        message_placeholder = st.chat_message(role)
+        message_placeholder.markdown(content)
     elif role == Role.user.name:
-        if content or medias:
-            message_placeholder = st.chat_message(role)
-            if medias:
-                for media in medias:
-                    controller.display_media(media, container=message_placeholder)
-            if content:
-                message_placeholder.markdown(content)
-        if i == len(st.session_state.conversation) - 2:
-            message_placeholder.button('✍🏼', help='重新输入', on_click=controller.handle_action, args=(
-                model.MODIFY_ACTION, message_placeholder))
-            
+        message_placeholder = st.chat_message(role)
+        if medias:
+            for media in medias:
+                controller.display_media(media, container=message_placeholder)
+        if content:
+            message_placeholder.markdown(content)
     elif role == Role.assistant.name:
         message_placeholder =  st.chat_message(role)
         controller.show_streaming_message(message, message_placeholder)
     else:
         raise Exception(f'Unknown role: {role}')
+    
+    # action
+    if message_placeholder:
+        controller.show_actions(message, message_placeholder)
 
     # page layout
     if st.session_state.desired_layout != 'wide' and message.role=='assistant' and utils.token_size(message.content) > WIDE_LAYOUT_THRESHOLD:

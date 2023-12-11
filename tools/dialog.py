@@ -1,6 +1,6 @@
 # Description: dialog management
 import os, logging, json, re
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 import pandas as pd
 from . import model, utils, google_sheet
@@ -9,6 +9,7 @@ from gspread import Worksheet, Spreadsheet, utils as gutils
 from gspread_pandas import Spread
 from streamlit.runtime.uploaded_file_manager import UploadedFile
 from functools import lru_cache
+from dateutil.parser import parse
 
 # 管理对话历史，存储在云端Google Drive里面
 # 文件夹：·CHAT_FOLDER·
@@ -96,10 +97,18 @@ def update_message(username, title, message:model.AppMessage, create=False):
         res = dialog.append_row(message_value, value_input_option='USER_ENTERED')
     else:
         try:
-            row_index = dialog.find(str(message.time), in_column=DIALOG_HEADER.index('time')+1).row
-        except:
-            logging.error(f'Cannot find message: {message_dict}')
-            return
+            time_str = message.time.strftime('%Y-%m-%d %H:%M:%S')
+            time_col = DIALOG_HEADER.index('time')+1
+            row_index = dialog.find(time_str, in_column=time_col).row
+        except Exception as e:
+            times = [parse(t) for t in dialog.col_values(time_col)[1:]]
+            t0 = min(times, key=lambda t: abs(message.time-t))
+            if abs(message.time-t0) < timedelta(seconds=10):
+                row_index = times.index(t0) + 2
+                logging.info(f'time matched: {message.time}<->{t0}')
+            else:
+                logging.error(f'Cannot find message: {time_str}<->{dialog.col_values(time_col)}')
+                return
         row_values = dialog.row_values(row_index)
         # we cannot update the whole row, google api will raise error, probably due to large content of `status`
         for i, (v0, v1) in enumerate(zip(row_values, message_value)):
