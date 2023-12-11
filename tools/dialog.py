@@ -95,7 +95,11 @@ def update_message(username, title, message:model.AppMessage, create=False):
     if create:
         res = dialog.append_row(message_value, value_input_option='USER_ENTERED')
     else:
-        row_index = dialog.find(message.content, in_column=DIALOG_HEADER.index('content')+1).row
+        try:
+            row_index = dialog.find(str(message.time), in_column=DIALOG_HEADER.index('time')+1).row
+        except:
+            logging.error(f'Cannot find message: {message_dict}')
+            return
         row_values = dialog.row_values(row_index)
         # we cannot update the whole row, google api will raise error, probably due to large content of `status`
         for i, (v0, v1) in enumerate(zip(row_values, message_value)):

@@ -1,11 +1,15 @@
 from st_pages import Page, show_pages, add_page_title
 import streamlit as st
-import sys, subprocess
+import sys, subprocess, datetime
 import sentry_sdk
 
 # error handling
 runner = sys.modules["streamlit.runtime.scriptrunner.script_runner"]
 original_handler = runner.handle_uncaught_app_exception
+try:
+    release = subprocess.check_output(["git", "describe", "--always"]).strip().decode()
+except:
+    release = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
 
 sentry_sdk.init(
     dsn="https://0e9ffdaf583b7b632cb67ade01839227@o200299.ingest.sentry.io/4506365834035200",
@@ -17,6 +21,8 @@ sentry_sdk.init(
     profiles_sample_rate=1.0,  
     # Enable performance monitoring
     enable_tracing=True,
+    # get git commit hash
+    release=release
 )
 
 

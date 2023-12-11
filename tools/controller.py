@@ -90,8 +90,10 @@ def show_streaming_message(message: Message, message_placeholder):
     # suggestion
     if not suggestions:
         content, suggestions = utils.parse_suggestions(content)
-        message.suggestions = suggestions
-        message.content = content
+        if suggestion != message.suggestions:
+            message.suggestions = suggestions
+            message.content = content
+            dialog.update_message(st.session_state.name, st.session_state.selected_title, message)
     if suggestions and last:
         suggestions = set(suggestions)
         for suggestion in suggestions:
