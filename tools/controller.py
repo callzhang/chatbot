@@ -93,15 +93,14 @@ def show_streaming_message(message: Message, message_placeholder):
         for media in medias:
             display_media(media, container=message_placeholder)
     # suggestion
-    if suggestions := message.suggestions:
+    if not (suggestions := message.suggestions) and last:
         content, suggestions = utils.parse_suggestions(content)
         if suggestions != message.suggestions and content != message.content:
             message.suggestions = suggestions
             message.content = content
             dialog.update_message(st.session_state.name, st.session_state.selected_title, message)
     if suggestions and last:
-        suggestions = set(suggestions)
-        for suggestion in suggestions:
+        for suggestion in set(suggestions):
             message_placeholder.button('👉🏻'+utils.truncate_text(suggestion,50), help=suggestion,
                         on_click=gen_response, kwargs={'query': suggestion})
     # text content

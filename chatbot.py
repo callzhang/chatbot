@@ -13,15 +13,18 @@ Task = model.Task
 Role = model.Role
 Message = model.AppMessage
 WIDE_LAYOUT_THRESHOLD = 1000
-if 'desired_layout' not in st.session_state:
-    st.session_state.desired_layout = 'centered'
-st.set_page_config(page_title="💬星尘小助手", page_icon="💬",
-                   layout=st.session_state.desired_layout,
-                   initial_sidebar_state="auto", menu_items={
-             'Get Help': 'https://stardust.ai',
-            #  'Report a bug': "https://www.extremelycoolapp.com/bug",
-             'About': "# 星尘小助手. \n *仅限员工使用，请勿外传!*"
-    })
+try:
+    if 'desired_layout' not in st.session_state:
+        st.session_state.desired_layout = 'centered'
+    st.set_page_config(page_title="💬星尘小助手", page_icon="💬",
+                    layout=st.session_state.desired_layout,
+                    initial_sidebar_state="auto", menu_items={
+                'Get Help': 'https://stardust.ai',
+                #  'Report a bug': "https://www.extremelycoolapp.com/bug",
+                'About': "# 星尘小助手. \n *仅限员工使用，请勿外传!*"
+        })
+except:
+    pass
 st.title("💬星尘小助手") 
     
 # user auth
