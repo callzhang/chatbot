@@ -84,7 +84,7 @@ if st.session_state.guest and len(st.session_state.conversation) > 10:
 elif task == Task.ChatGPT.value:
     disabled, help = False, '输入你的问题，然后按回车提交。'
 elif task == Task.ChatSearch.value:
-    help = '输入你的问题，如果信息需要检索，会自动调用搜索引擎。'
+    help = '输入你的问题，按需调用搜索引擎。'
 elif task == Task.GPT4.value:
     help = '输入你的问题，然后按回车提交。'
 elif task == Task.GPT4V.value:
@@ -183,10 +183,11 @@ with c3: # 导出
         st.success('导出成功！')
 with c4: # 修改
     def update_title():
-        del st.session_state.conversation
         new_title = st.session_state.new_title_text
+        if new_title in st.session_state.dialog_history:
+            new_title += '(1)'
         dialog.edit_dialog_name(st.session_state.name, st.session_state.selected_title, new_title)
-        st.session_state.seleted_title = new_title
+        st.session_state.new_title = new_title
     if st.button('✏️', help='修改对话名称'):
         new_title = st.sidebar.text_input('修改名称', st.session_state.selected_title, help='修改当前对话标题', key='new_title_text', on_change=update_title)
         

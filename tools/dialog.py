@@ -48,31 +48,37 @@ TIME_FORMAT = '%Y-%m-%d_%H-%M-%S'
 def init_dialog(username):
     # history: 所有对话标题的索引，[time, title, file]
     # conversation: 对话的具体内容列表，[{role, name, time, content, suggestion},...]
+    
+    # 初始化当前对话
+    history = get_history(username)
+    # 初始化对话列表
+    st.session_state.dialog_history = history.col_values(2)[1:]
+    if not st.session_state.dialog_history:
+        # 没有历史记录或创建新对话，增加“新对话”至title
+        dialog_title = new_dialog(username)
+        st.session_state.selected_title = dialog_title
+        st.rerun()
+    elif 'new_title' in st.session_state:
+        # 点击新增dialog按钮，通过“new_title”来传递逻辑
+        st.session_state.selected_title = st.session_state.new_title
+        del st.session_state.new_title
+    elif 'chat_title_selection' in st.session_state:
+        # select the title according to "chat_title_selection" UI selection
+        st.session_state.selected_title = st.session_state.chat_title_selection
+    # if current selected title in UI doesn't exist (due to deletion), select a new title
+    if 'selected_title' not in st.session_state or st.session_state.selected_title not in st.session_state.dialog_history:
+        logging.warning(
+            f'Current selected title {st.session_state.selected_title} not in history ({st.session_state.dialog_history}), select a new one')
+        st.session_state.selected_title = st.session_state.dialog_history[0]
+    # load conversation
     if "conversation" not in st.session_state:
-        # 初始化当前对话
-        history = get_history(username)
-        # 初始化对话列表
-        st.session_state.dialog_history = history.col_values(2)[1:]
-        if not st.session_state.dialog_history:
-            # 没有历史记录或创建新对话，增加“新对话”至title
-            dialog_title = new_dialog(username)
-            st.session_state.selected_title = dialog_title
-            st.rerun()
-        elif 'new_title' in st.session_state:
-            # 点击新增dialog按钮，通过“new_title”来传递逻辑
-            st.session_state.selected_title = st.session_state.new_title
-            del st.session_state.new_title
-        elif 'chat_title_selection' in st.session_state:
-            # select the title according to "chat_title_selection" UI selection
-            st.session_state.selected_title = st.session_state.chat_title_selection
-        # if current selected title in UI doesn't exist (due to deletion), select a new title
-        if 'selected_title' not in st.session_state or st.session_state.selected_title not in st.session_state.dialog_history:
-            st.session_state.selected_title = st.session_state.dialog_history[0]
-            
-        # get对话记录
-        messages = get_messages(username, st.session_state.selected_title)
-        st.session_state.conversation = messages
-    return st.session_state.conversation
+        load_conversation(username, st.session_state.selected_title)
+        
+def load_conversation(username, title):
+    # get对话记录
+    messages = get_messages(username, title)
+    st.session_state.conversation = messages
+    return messages
 
 
 ## message
@@ -216,7 +222,7 @@ def edit_dialog_name(username, old_title, new_title):
     history = get_history(username)
     cell = history.find(old_title, in_column=2)
     history.update_cell(row=cell.row, col=cell.col, value=new_title)
-    
+    # get_history.cache_clear()
     
 def delete_dialog(username, title):
     history = get_history(username)
@@ -293,7 +299,7 @@ def delete_thread(username, thread_id):
 def conversation2markdown(messages:list[model.AppMessage], title=""):
     if not messages:
         return ''
-    conversation = [m.dict() for m in messages]
+    conversation = [m.model_dump() for m in messages]
     history = pd.DataFrame(conversation).query('role not in ["system", "audio"]')
     # export markdown
     md_formated = f"""# 关于“{title}”的对话记录

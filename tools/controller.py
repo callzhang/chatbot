@@ -52,7 +52,7 @@ def show_streaming_message(message: Message, message_placeholder):
                 elif isinstance(item, dict):  # network error
                     if v := item.get(model.SERVER_ERROR):
                         message.content += f'\n\n{v}'
-                        message.actions = {RETRY_ACTION: '重试'}
+                        message.actions = [{'action': RETRY_ACTION, 'label': '🔁', 'help': '重新生成'}]
                         finish_reply(message)
                     elif functions := item.get(model.TOOL_RESULT):
                         # message.content += f'```{json.dumps(v, indent=2, ensure_ascii=False)}```'
@@ -69,7 +69,7 @@ def show_streaming_message(message: Message, message_placeholder):
             # 超时
             if (datetime.now() - message.time).total_seconds() > model.TIMEOUT:
                 message.content += '\n\n请求超时，请重试...'
-                message.actions = {RETRY_ACTION: '重试'}
+                message.actions = [{'action': RETRY_ACTION, 'label': '🔁', 'help': '重新生成'}]
                 finish_reply(message)
                 break
             # 渲染
@@ -112,23 +112,25 @@ def show_actions(message: Message, message_placeholder):
     last = i == len(st.session_state.conversation) - 1
     modify = (i == len(st.session_state.conversation) - 2) and (message.role == Role.user.name)
     # actions: only "retry" is supported
-    actions = message.actions or []
-    if message.content and message.role==Role.assistant.name:
-        actions.append({'action': SPEAK_ACTION, 'label':'🔈', 'autoplay': True,
-                        'help': '朗读', 'container': message_placeholder, 'message': message})
-    if last:
-        actions.append({'action': RETRY_ACTION, 'label': '🔁',
-                        'help': '重新生成', 'container': message_placeholder})
-        actions.append({'action': DELETE_ACTION, 'label': '❌', 'help': '删除',
-                        'container': message_placeholder})
-    if modify:
-        actions.append({'action': MODIFY_ACTION, 'label': '✍🏼',
-                        'help': '修改', 'container': message_placeholder})
+    actions = message.actions
+    if not actions:
+        actions = []
+        if message.content and message.role==Role.assistant.name:
+            actions.append({'action': SPEAK_ACTION, 'label':'🔈', 'autoplay': True,
+                            'help': '朗读', 'container': message_placeholder, 'message': message})
+        if last:
+            actions.append({'action': RETRY_ACTION, 'label': '🔁',
+                            'help': '重新生成', 'container': message_placeholder})
+            actions.append({'action': DELETE_ACTION, 'label': '❌', 'help': '删除',
+                            'container': message_placeholder})
+        if modify:
+            actions.append({'action': MODIFY_ACTION, 'label': '✍🏼',
+                            'help': '修改', 'container': message_placeholder})
     
-    if actions:
-        action_spacing = [0.1]*len(actions) + [1-0.1*len(actions)]
-        for col, action in zip(message_placeholder.columns(action_spacing), actions):
-            col.button(action['label'], help=action['help'], key=f'{action["action"]}-{i}', on_click=handle_action, kwargs=action)
+    # display actions
+    action_spacing = [0.1]*len(actions) + [1-0.1*len(actions)]
+    for col, action in zip(message_placeholder.columns(action_spacing), actions):
+        col.button(action['label'], help=action['help'], key=f'{action["action"]}-{i}', on_click=handle_action, kwargs=action)
         
 
 ## 对输入进行应答
@@ -267,11 +269,11 @@ def gen_response(query=None):
 def handle_action(action, **kwargs):
     container = kwargs['container']
     if action == RETRY_ACTION:
-        bot_response = delete_last_message()
-        user_prompt = delete_last_message()
-        if bot_response.role == Role.assistant.name and user_prompt.role == Role.user.name:
-            user_input = user_prompt.content
-            gen_response(query=user_input)
+        while last_response := delete_last_message():
+            if last_response.role == Role.user.name:
+                break
+        user_input = last_response.content
+        gen_response(query=user_input)
     elif action == MODIFY_ACTION:
         bot_response = delete_last_message()
         user_prompt = delete_last_message()
@@ -298,6 +300,8 @@ def handle_action(action, **kwargs):
             play_audio(voice, container, autoplay=kwargs['autoplay'])
             st.text('保存中...')
             dialog.update_message(st.session_state.name, st.session_state.selected_title, message, create=False)
+    elif action == DELETE_ACTION:
+        delete_last_message()
     else:
         raise NotImplementedError(action)
     
