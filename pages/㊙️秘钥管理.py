@@ -2,6 +2,7 @@ import streamlit as st
 import json, os, time
 import extra_streamlit_components as stx
 from tools import utils, model, auth
+from datetime import datetime, timedelta
 
 st.title('秘钥输入')
 st.write('请在下方输入秘钥，我们不会泄露你的秘钥，但是请注意不要泄露给他人')
@@ -93,7 +94,6 @@ with bing_tab:
         st.success('BingAI cookies已保存')
         time.sleep(1)
         st.rerun()
-    
 
 # log out
 cm = stx.CookieManager()
@@ -101,3 +101,20 @@ if st.button('退出登录'):
     cm.delete(model.LOGIN_CODE)
     del st.session_state.name
     del st.session_state.conversation
+
+
+# admin
+
+admins = eval(st.secrets.admins)
+if st.session_state.name in admins:
+    st.subheader('Admin panel')
+    add_user_tab, delete_user_tab, all_users_tab = st.tabs(['添加用户', '删除用户', '用户列表'])
+    with add_user_tab:
+        st.info('添加用户')
+        username = st.text_input('用户名')
+        code = st.text_input('访问码')
+        expiration = st.date_input('截止日期', value=datetime.now()+timedelta(days=360))
+        if st.button('添加用户'):
+            auth.add_user(username, code, expiration)
+            st.success('用户添加成功')
+            st.stop()

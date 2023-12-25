@@ -378,7 +378,7 @@ def history2chat(history:list[dict]) -> list[list]:
 
 
 # convert AppMessage to OpenAI chat format
-def conversation2history(conversation:list[model.AppMessage], guest, task) -> list[dict]:
+def conversation2history(conversation:list[model.Message], guest, task) -> list[dict]:
     max_length = 500 if guest else task_params[task]['max_tokens']
     chat_history = [{k: c.model_dump()[k] for k in key2keep}
                     for c in conversation if c.role in roles2keep and c.content]
@@ -430,7 +430,7 @@ if __name__ == '__main__':
     ## test search
     st.session_state.name = 'Derek'
     chat_history = [
-        model.AppMessage(
+        model.Message(
             role= model.Role.user.name, 
             name = 'Derek',
             content= messages,

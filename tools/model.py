@@ -65,7 +65,7 @@ class MediaType(Enum):
     
     
 # @dataclass
-class AppMessage(BaseModel):
+class Message(BaseModel):
     class Config:
         arbitrary_types_allowed = True
         # allow_mutation = False
@@ -203,7 +203,7 @@ class AppMessage(BaseModel):
 
 
 if __name__ == '__main__':
-    msg = AppMessage(
+    msg = Message(
         role = 'user',
         content = 'hello',
         queue = None,

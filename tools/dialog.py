@@ -20,12 +20,12 @@ HISTORY_SHEET_NAME = 'history'
 HISTORY_HEADER = ['time', 'title', 'sheet']
 # 其余sheet为dialog，名称对应history的sheet
 DIALOG_HEADER = ['role', 'name', 'content', 'time', 'task', 'suggestions', 'actions', 'medias', 'status']
-# Objects 对应关系
-# | dataclass   |   local var | cloud       | comment  |
-# |     -       |       -     | spreadsheet | 用户文件  |
-# | history     |   history   | sheet       | 对话记录  |
-# |[AppMessage] |conversation | dialog      | 对话      |
-# | AppMessage  |   message   | row         | 消息      |
+'''Objects 对应关系
+| dataclass   |   model     | cloud       | comment  |
+|     -       |   dialog    | spreadsheet | 所有对话  |
+|[AppMessage] | conversation| sheet       | 对话      |
+| AppMessage  |  message    |   row       | 消息      |
+'''
 
 client = google_sheet.init_client()
 
@@ -44,13 +44,13 @@ guest_prompt = lambda user: [{"role": "system", "content": f'用户是访客，�
 TIME_FORMAT = '%Y-%m-%d_%H-%M-%S'
 
 
-# init dialog for UI
-def init_dialog(username):
-    # history: 所有对话标题的索引，[time, title, file]
+# dialog: all conversations
+def init_dialog_history(username):
+    # dialog_history: 所有对话标题的索引，[time, title, file]
     # conversation: 对话的具体内容列表，[{role, name, time, content, suggestion},...]
     
     # 初始化当前对话
-    history = get_history(username)
+    history = get_dialog_history(username)
     # 初始化对话列表
     st.session_state.dialog_history = history.col_values(2)[1:]
     if not st.session_state.dialog_history:
@@ -68,7 +68,7 @@ def init_dialog(username):
     # if current selected title in UI doesn't exist (due to deletion), select a new title
     if 'selected_title' not in st.session_state or st.session_state.selected_title not in st.session_state.dialog_history:
         logging.warning(
-            f'Current selected title {st.session_state.selected_title} not in history ({st.session_state.dialog_history}), select a new one')
+            f'Current selected title {st.session_state.get("selected_title")} not in history ({st.session_state.dialog_history}), select a new one')
         st.session_state.selected_title = st.session_state.dialog_history[0]
     # load conversation
     if "conversation" not in st.session_state:
@@ -82,7 +82,18 @@ def load_conversation(username, title):
 
 
 ## message
-def update_message(username, title, message:model.AppMessage, create=False):
+class Chat(model.Message):
+    pass
+
+def update_message(username, title, message:model.Message, create=False):
+    # execute update in a thread using update_message_worker to avoid blocking
+    from threading import Thread
+    t = Thread(target=update_message_worker, args=(username, title, message, create))
+    t.start()
+    return t
+    
+
+def update_message_worker(username, title, message:model.Message, create=False):
     from .controller import openai_image_types
     dialog = get_dialog(username, title)
     # create chat entry as a dict
@@ -107,11 +118,12 @@ def update_message(username, title, message:model.AppMessage, create=False):
             time_col = DIALOG_HEADER.index('time')+1
             row_index = dialog.find(time_str, in_column=time_col).row
         except Exception as e:
+            # 没有找到匹配的时间，尝试找最近的时间
             times = [parse(t) for t in dialog.col_values(time_col)[1:]]
             t0 = min(times, key=lambda t: abs(message.time-t))
             if abs(message.time-t0) < timedelta(seconds=10):
                 row_index = times.index(t0) + 2
-                logging.info(f'time matched: {message.time}<->{t0}')
+                # logging.info(f'time matched: {message.time}<->{t0}')
             else:
                 logging.error(f'Cannot find message: {time_str}<->{dialog.col_values(time_col)}')
                 return
@@ -135,7 +147,7 @@ def get_messages(username, title):
     messages = []
     for c in records:
         try:
-            msg = model.AppMessage(**c)
+            msg = model.Message(**c)
             messages.append(msg)
         except Exception as e:
             logging.error(f'Error when loading chat: {c} \n Error: {e}')
@@ -157,7 +169,7 @@ def get_dialog(username:str, title:str) -> Worksheet:
     :param title: the title of the dialog
     :returns: the sheet object contains the whole dialog
     '''
-    history = get_history(username)
+    history = get_dialog_history(username)
     cell = history.find(title, in_column=2)
     dialog_title = history.cell(cell.row, 3).value
     all_sheets = [s.title for s in history.spreadsheet.worksheets()]
@@ -170,7 +182,7 @@ def get_dialog(username:str, title:str) -> Worksheet:
 
 
 @lru_cache
-def get_history(username) -> Worksheet:
+def get_dialog_history(username) -> Worksheet:
     # history_file = CHAT_LOG_ROOT/username/'history.csv'
     record_file = Spread(username, sheet='history', client=client, create_sheet=True, create_spread=True)
     # history = history.sheet_to_df(index=None, formula_columns=['medias'])
@@ -185,7 +197,7 @@ def get_history(username) -> Worksheet:
 def new_dialog(username, dialog_title=None) -> str:
     if not dialog_title:
         dialog_title = datetime.now().strftime(TIME_FORMAT)
-    history = get_history(username)
+    history = get_dialog_history(username)
     all_historys = history.col_values(2)[1:]
     if dialog_title in history.col_values(2):
         all_sheets = [s.title for s in history.spreadsheet.worksheets()]
@@ -219,13 +231,13 @@ def new_dialog(username, dialog_title=None) -> str:
     
     
 def edit_dialog_name(username, old_title, new_title):
-    history = get_history(username)
+    history = get_dialog_history(username)
     cell = history.find(old_title, in_column=2)
     history.update_cell(row=cell.row, col=cell.col, value=new_title)
-    # get_history.cache_clear()
+    
     
 def delete_dialog(username, title):
-    history = get_history(username)
+    history = get_dialog_history(username)
     cell = history.find(title, in_column=2)
     sheet = history.cell(row=cell.row, col=3).value
     dialog = history.spreadsheet.worksheet(sheet)
@@ -287,7 +299,7 @@ def new_thread(username, thread_id, assistant_id, title=None):
 
 
 def delete_thread(username, thread_id):
-    history = get_history(username)
+    history = get_dialog_history(username)
     chat = history.query('thread_id==@thread_id')
     history.drop(chat.index.values, inplace=True)
     history.to_csv(CHAT_LOG_ROOT/username/THREAD_FILE)
@@ -296,7 +308,7 @@ def delete_thread(username, thread_id):
 ## ----------- Utils -----------
 # export
 # 导出对话内容到 markdown
-def conversation2markdown(messages:list[model.AppMessage], title=""):
+def conversation2markdown(messages:list[model.Message], title=""):
     if not messages:
         return ''
     conversation = [m.model_dump() for m in messages]

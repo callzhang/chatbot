@@ -11,7 +11,7 @@ runner = sys.modules["streamlit.runtime.scriptrunner.script_runner"]
 # 初始化
 Task = model.Task
 Role = model.Role
-Message = model.AppMessage
+Message = model.Message
 WIDE_LAYOUT_THRESHOLD = 1000
 try:
     if 'desired_layout' not in st.session_state:
@@ -43,24 +43,15 @@ if 'name' not in st.session_state:
         st.info('我是一个集成多个聊天机器人能力的小助手，希望能帮助你提高工作效率😊')
         code = st.text_input('请输入你的访问码', help='仅限员工使用，请勿外传！')
     if code:
-        user_db = auth.get_db()
-        access_data = user_db.query('访问码==@code')
-        exp_date = datetime.now() + timedelta(days=10)# set cookie expire date to 10 days later
-        if len(access_data):
-            st.session_state.name = access_data.index.values[0]
-            expiration = access_data['截止日期'].iloc[0]
-            if datetime.now().date() < expiration.date():
-                # login success
-                st.session_state.guest = False
-                exp_date = datetime(expiration.year, expiration.month, expiration.day, 23, 59, 59)
-        else: #guest
-            st.session_state.name = code
+        username, exp_date, authenticated = auth.validate_code(code)
+        st.session_state.guest = not authenticated
+        st.session_state.name = username
         cm.set(model.LOGIN_CODE, code, expires_at=exp_date)
         st.rerun()
     st.stop()
     
 ## dialog history management
-dialog.init_dialog(st.session_state.name)
+dialog.init_dialog_history(st.session_state.name)
 
 ##---- UI -----
 task = st.selectbox('选择功能', Task.values(), key='task', label_visibility='collapsed')

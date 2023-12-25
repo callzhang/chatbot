@@ -8,7 +8,7 @@ from streamlit.runtime.uploaded_file_manager import UploadedFile, UploadedFileRe
 
 Task = model.Task
 Role = model.Role
-Message = model.AppMessage
+Message = model.Message
 
 openai_image_types = openai.accepted_image_types
 speech_media_types = speech.accepted_types
@@ -267,7 +267,7 @@ def gen_response(query=None):
 
 
 def handle_action(action, **kwargs):
-    container = kwargs['container']
+    container = kwargs.get('container')
     if action == RETRY_ACTION:
         while last_response := delete_last_message():
             if last_response.role == Role.user.name:
@@ -296,7 +296,7 @@ def handle_action(action, **kwargs):
                 data=data.getvalue(),
             )
             voice = UploadedFile(rec, None)
-            message.medias = model.AppMessage.set_medias(voice)
+            message.medias = model.Message.set_medias(voice)
             play_audio(voice, container, autoplay=kwargs['autoplay'])
             st.text('保存中...')
             dialog.update_message(st.session_state.name, st.session_state.selected_title, message, create=False)

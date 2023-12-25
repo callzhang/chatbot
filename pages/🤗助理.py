@@ -51,7 +51,7 @@ st.caption(st.session_state.current_assistant.instructions)
 st.session_state.name = 'Derek'
 st.session_state.guest = False
 st.session_state.task = model.Task.ChatGPT.value
-dialog.init_dialog('Derek')
+dialog.init_dialog_history('Derek')
     
 ## SDK: success
 # with st.chat_message('ai'):

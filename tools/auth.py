@@ -4,6 +4,7 @@ import streamlit as st
 import os, time
 from . import model, utils, google_sheet
 from retry import retry
+from datetime import datetime, timedelta
 
 ## 管理秘钥
 import json, toml
@@ -53,21 +54,60 @@ def get_apify_token():
         data = toml.load(f)
     return data.get('apify_token')
 
-## user table
+## user auth
 client = google_sheet.init_client()
 sheet_url = st.secrets["public_gsheets_url"]
-# from shillelagh.backends.apsw.db import connect
+# 用户名	访问码	截止日期
 @utils.cached(timeout=600)
 @retry(tries=3, delay=2, backoff=2)
-def get_db():
-    db = Spread('星尘小助手用户', client=client)
+def get_user_db():
+    db = Spread(sheet_url, client=client)
     df = db.sheet_to_df()
     df['截止日期'] = pd.to_datetime(df['截止日期'])
     print(f'Fetched {len(df)} user records')
     return df
 
+def validate_code(code:str):
+    user_db = get_user_db()
+    access_data = user_db.query('访问码==@code')
+    authenticated = False
+    username = code
+    cookie_exp_date = datetime.now() + timedelta(days=10)# set cookie expire date to 10 days later
+    if len(access_data):
+        username = access_data.index.values[0]
+        expiration = access_data['截止日期'].iloc[0]
+        if datetime.now().date() < expiration.date():
+            # login success
+            authenticated = True
+            st.session_state.guest = False
+            cookie_exp_date = datetime(expiration.year, expiration.month, expiration.day, 23, 59, 59)
+    elif user_db.query('用户名==@code'):
+        #登录码=用户名，增加一层防护
+        username = "Visitor_"+code
+    return username, cookie_exp_date, authenticated
 
+
+def add_user(username:str, code:str, expiration:str):
+    user_db = get_user_db()
+    if username in user_db.index:
+        st.error(f'用户{username}已存在')
+        return
+    user_db.loc[username] = [code, expiration]
+    db = Spread(sheet_url, client=client)
+    db.df_to_sheet(user_db, index=True, sheet='用户信息', start='A1', replace=True)
+    st.success(f'用户{username}添加成功！')
+    
+def delete_user(username:str):
+    user_db = get_user_db()
+    if username not in user_db.index:
+        st.error(f'用户{username}不存在')
+        return
+    user_db.drop(username, inplace=True)
+    db = Spread(sheet_url, client=client)
+    db.df_to_sheet(user_db, index=True, sheet='用户信息', start='A1', replace=True)
+    st.success(f'用户{username}删除成功！')
+    
 
 if __name__ == '__main__':
-    db = get_db()
+    db = get_user_db()
     print(db)

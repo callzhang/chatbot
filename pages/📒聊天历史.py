@@ -11,7 +11,7 @@ if 'name' not in st.session_state:
 
 
 # get history
-chat_history = dialog.get_history(st.session_state.name)
+chat_history = dialog.get_dialog_history(st.session_state.name)
 chat_titles = chat_history.col_values(2)[1:]
 if not len(chat_titles):
     st.info('暂无历史记录')
