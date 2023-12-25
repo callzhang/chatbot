@@ -83,7 +83,7 @@ def validate_code(code:str):
             authenticated = True
             st.session_state.guest = False
             cookie_exp_date = datetime(expiration.year, expiration.month, expiration.day, 23, 59, 59)
-    elif user_db.query('用户名==@code'):
+    elif not user_db.query('用户名==@code').empty:
         #登录码=用户名，增加一层防护
         username = "Visitor_"+code
     return username, cookie_exp_date, authenticated
