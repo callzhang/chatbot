@@ -5,6 +5,7 @@ import os, time
 from . import model, utils, google_sheet
 from retry import retry
 from datetime import datetime, timedelta
+from dateutil.parser import parse
 
 ## 管理秘钥
 import json, toml
@@ -63,9 +64,10 @@ sheet_url = st.secrets["public_gsheets_url"]
 def get_user_db():
     db = Spread(sheet_url, client=client)
     df = db.sheet_to_df()
-    df['截止日期'] = pd.to_datetime(df['截止日期'])
+    df['截止日期'] = df['截止日期'].apply(parse)
     print(f'Fetched {len(df)} user records')
     return df
+
 
 def validate_code(code:str):
     user_db = get_user_db()
@@ -91,22 +93,21 @@ def add_user(username:str, code:str, expiration:str):
     user_db = get_user_db()
     if username in user_db.index:
         st.error(f'用户{username}已存在')
-        return
+        return False
     user_db.loc[username] = [code, expiration]
     db = Spread(sheet_url, client=client)
     db.df_to_sheet(user_db, index=True, sheet='用户信息', start='A1', replace=True)
-    st.success(f'用户{username}添加成功！')
+    return True
     
 def delete_user(username:str):
     user_db = get_user_db()
     if username not in user_db.index:
         st.error(f'用户{username}不存在')
-        return
+        return False
     user_db.drop(username, inplace=True)
     db = Spread(sheet_url, client=client)
     db.df_to_sheet(user_db, index=True, sheet='用户信息', start='A1', replace=True)
-    st.success(f'用户{username}删除成功！')
-    
+    return True
 
 if __name__ == '__main__':
     db = get_user_db()

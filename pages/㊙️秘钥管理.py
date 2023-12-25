@@ -115,6 +115,20 @@ if st.session_state.name in admins:
         code = st.text_input('访问码')
         expiration = st.date_input('截止日期', value=datetime.now()+timedelta(days=360))
         if st.button('添加用户'):
-            auth.add_user(username, code, expiration)
-            st.success('用户添加成功')
-            st.stop()
+            if auth.add_user(username, code, expiration):
+                st.success('用户添加成功')
+            else:
+                st.error('用户添加失败')
+            
+    with delete_user_tab:
+        st.info('删除用户')
+        username = st.selectbox('用户名', auth.get_user_db().index)
+        if st.button('删除用户'):
+            if auth.delete_user(username):
+                st.success('用户删除成功')
+            else:
+                st.error('用户删除失败')
+                
+    with all_users_tab:
+        st.info('用户列表')
+        st.dataframe(auth.get_user_db())
