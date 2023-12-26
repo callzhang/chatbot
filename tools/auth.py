@@ -11,20 +11,12 @@ from dateutil.parser import parse
 import json, toml
 @utils.cached()
 def get_default_key(task):
-    with open('.streamlit/secrets.toml', 'r') as f:
-        data = toml.load(f)
-    if task == model.Task.GPT4.name:
-        key = data.get('gpt4-key')
-    elif task == model.Task.GPT4V.name:
-        key = data.get('gpt4v-key')
-    else:
-        key = data.get(f'openai-key')
+    key = st.secrets.get('openai-key')
     return key
 
 
 @utils.cached()
 def get_openai_key(task=None, username=None):
-    
     username=st.session_state.name if 'name' in st.session_state else 'NA'
     my_openai_key_file = f'secrets/{username}/openai_key.json'
     if os.path.exists(my_openai_key_file):
@@ -58,13 +50,16 @@ def get_apify_token():
 ## user auth
 client = google_sheet.init_client()
 sheet_url = st.secrets["public_gsheets_url"]
-# 用户名	访问码	截止日期
+user_table_header = ['访问码', '截止日期', '信息检索', '对话', '语音识别', '文本朗读', '文字做图', 'GPT4', 'GPT4V', 'Assistant']
+
 @utils.cached(timeout=600)
 @retry(tries=3, delay=2, backoff=2)
 def get_user_db():
     db = Spread(sheet_url, client=client)
     df = db.sheet_to_df()
     df['截止日期'] = df['截止日期'].apply(parse)
+    true_value = lambda x: x == 'TRUE' or x is True
+    df[user_table_header[2:]] = df[user_table_header[2:]].applymap(true_value)
     print(f'Fetched {len(df)} user records')
     return df
 
@@ -77,7 +72,7 @@ def get_admin_db():
     print(f'Fetched {len(df)} admin records')
     return df
 
-def has_ability(username, task):
+def admin_task(username, task):
     db = get_user_db()
     if username in db.index:
         return task in db.loc[username, '权限']
@@ -152,6 +147,21 @@ def delete_user(username:str):
     db = Spread(sheet_url, client=client)
     db.df_to_sheet(user_db, index=True, sheet='用户信息', start='A1', replace=True)
     return True
+
+def user_task_list(username:str):
+    user_db = get_user_db()
+    if username not in user_db.index:
+        return {
+            '信息检索': True,
+            '对话': True,
+            '语音识别': True,
+            '文本朗读': True,
+            '文字做图': False,
+            'GPT4': True,
+            'GPT4V': False,
+            'Assistant': False,
+        }
+    return user_db.loc[username][2:].to_dict()
 
 if __name__ == '__main__':
     db = get_user_db()

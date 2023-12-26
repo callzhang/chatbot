@@ -67,49 +67,42 @@ if st.session_state.guest:
     st.info('访客模式：支持最大10轮对话和20轮聊天历史')
 
 # 添加文本输入框
-disabled = st.session_state.guest
+task_info = auth.user_task_list(st.session_state.name)
+enabled = task_info[task]
+label = None
+max_chars = controller.task_params[task][task]['max_tokens']
 if st.session_state.guest and len(st.session_state.conversation) > 10:
-    disabled, help = True, '访客不支持长对话，请联系管理员'
+    enabled, help = False, '访客不支持长对话，请联系管理员'
 elif task == Task.ChatGPT.value:
-    disabled, help = False, '输入你的问题，然后按回车提交。'
+    help = '输入你的问题，然后按回车提交。'
 elif task == Task.ChatSearch.value:
     help = '输入你的问题，按需调用搜索引擎。'
 elif task == Task.GPT4.value:
     help = '输入你的问题，然后按回车提交。'
 elif task == Task.GPT4V.value:
     help = '输入你的问题，并上传图片，然后按回车提交。'
-# elif task == Task.BingAI.value:
-#     if utils.get_bingai_key(st.session_state.name) is None:
-#         disabled, help = True, '请先在设置中填写BingAI的秘钥'
-#     else:
-#         disabled, help = False, '输入你的问题，然后按回车提交给BingAI。'
+    label = '🎨上传图片'
+    filetypes = controller.openai_image_types
 elif task == Task.text2img.value:
     help = '访客不支持文字做图' if st.session_state.guest else '输入你的prompt'
 elif task == Task.ASR.value:
+    label = '🎤上传语音文件'
+    filetypes = controller.speech_media_types
     help = '访客不支持语音识别' if st.session_state.guest else '上传语音文件'
 elif task == Task.TTS.value:
     help = '访客不支持文本朗读' if st.session_state.guest else '输入需要朗读的文本'
 else:
     raise NotImplementedError(task)
 
-# 输入框
-label = None
-max_chars = controller.task_params[task][task]['max_tokens']
-if task in Task.ASR.value:
-    label = '🎤上传语音文件'
-    filetypes = controller.speech_media_types
-elif task == Task.GPT4V.value:
-    label = '🎨上传图片'
-    filetypes = controller.openai_image_types
+# 文件上传
 if label:
     attachment = st.file_uploader(
-        label, type=filetypes, key='attachment', disabled=disabled)
-# input
+        label, type=filetypes, key='attachment', disabled=not enabled)
+# chat input
 user_input = st.chat_input(placeholder=help,
                            key='input_text',
-                           disabled=disabled,
+                           disabled=not enabled,
                            max_chars=max_chars,
-                        #    on_submit=controller.gen_response
                            )
 if user_input:
     user_message, bot_response = controller.gen_response(user_input)
@@ -149,7 +142,7 @@ for i, message in enumerate(st.session_state.conversation):
 ## 聊天历史功能区
 c1, c2, c3, c4 = st.sidebar.columns(4)
 with c1: # 新对话
-    if st.session_state.guest and len(st.session_state.dialog_history) >= 20:
+    if st.session_state.guest and len(st.session_state.dialog_history) >= 5:
         disabled, help = True, '访客不支持超过10轮对话，请联系管理员'
     else:
         disabled, help = False, '新对话'

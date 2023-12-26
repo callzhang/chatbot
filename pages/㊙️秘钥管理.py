@@ -140,8 +140,7 @@ if st.session_state.name in admins:
         task_val = []
         for col, task in zip(st.columns(len(columns)), columns):
             with col:
-                val = info[task] == 'TRUE' or info[task] is True
-                checked = st.checkbox(task, value=val, key=f'{username}_{task}_checkbox')
+                checked = st.checkbox(task, value=info[task], key=f'{username}_{task}_checkbox')
                 task_val.append(checked)
             
         if st.button('更新用户'):
