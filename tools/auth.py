@@ -77,6 +77,13 @@ def get_admin_db():
     print(f'Fetched {len(df)} admin records')
     return df
 
+def has_ability(username, task):
+    db = get_user_db()
+    if username in db.index:
+        return task in db.loc[username, '权限']
+    else:
+        return False
+
 def is_admin(username, action=None):
     db = get_admin_db()
     query = f'@username in index'
@@ -111,21 +118,26 @@ def add_user(username:str, code:str, expiration:datetime):
     if username in user_db.index:
         st.error(f'用户{username}已存在')
         return False
-    user_db.loc[username] = [code, expiration]
+    if not user_db.query(f'访问码==@code').empty:
+        st.error(f'访问码【{code}】不安全，请重新输入')
+        return False
+    user_db.loc[username] = [code, expiration] + [True]*5 + [False]*3
+    user_db['截止日期'] = pd.to_datetime(user_db['截止日期'])
     db = Spread(sheet_url, client=client)
     db.df_to_sheet(user_db, index=True, sheet='用户信息', start='A1', replace=True)
     return True
 
-def update_user(username:str, code:str, expiration:datetime):
+def update_user(username:str, rows):
     user_db = get_user_db()
     if username not in user_db.index:
         st.error(f'用户{username}不存在')
         return False
     # check code duplication
+    code = rows[0]
     if not user_db.query(f'index!=@username and 访问码==@code').empty:
         st.error(f'访问码{code}已存在')
         return False
-    user_db.loc[username] = [code, expiration]
+    user_db.loc[username] = rows
     user_db['截止日期'] = pd.to_datetime(user_db['截止日期'])
     db = Spread(sheet_url, client=client)
     db.df_to_sheet(user_db, index=True, sheet='用户信息', start='A1', replace=True)

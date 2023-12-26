@@ -27,10 +27,11 @@ class Task(Enum):
     ChatGPT = '对话'
     GPT4 = 'GPT4'
     GPT4V = 'GPT4V'
-    BingAI = 'BingAI'
+    # BingAI = 'BingAI'
     text2img = '文字做图'
     ASR = '语音识别'
     TTS = '文本朗读'
+    Assistant = 'Assistant'
     @classmethod
     def names(cls):
         return [c.name for c in cls]

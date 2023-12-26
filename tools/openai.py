@@ -30,12 +30,14 @@ task_params = {
     },
     model.Task.GPT4.value: {
         'model': 'gpt-4',
-        'url': 'https://yeqiu-gpt4-3.xyhelper.cn/v1/chat/completions',
+        # 'url': 'https://yeqiu-gpt4-3.xyhelper.cn/v1/chat/completions',
+        'url': 'https://api.openai.com/v1/chat/completions',
         'max_tokens': 8000,
     },
     model.Task.GPT4V.value: {
         'model': 'gpt-4v',
-        'url': 'http://121.127.44.50:8100/v1/chat/gpt4v',
+        # 'url': 'http://121.127.44.50:8100/v1/chat/gpt4v',
+        'url': 'https://api.openai.com/v1/chat/completions',
         'max_tokens': 4000,
     }
 }

@@ -122,22 +122,35 @@ if st.session_state.name in admins:
             
     with edit_user_tab:
         db = auth.get_user_db()
+        # task
+        tasks = model.Task.values()
+        columns = db.columns[2:].to_list()
+        assert all([t in columns for t in tasks])
         c1, c2, c3 = st.columns(3)
         with c1:
             username_pl = st.empty()
             username = username_pl.selectbox('用户名', db.index)
             info = db.loc[username]
         with c2:
-            code = st.text_input('新访问码, 留空不更新')
+            code = st.text_input('新访问码, 留空不更新', key=f'{username}_code')
         with c3:
-            exp_date = st.date_input('新截止日期', value=info['截止日期'])
+            exp_date = st.date_input(
+                '新截止日期', value=info['截止日期'], key=f'{username}_exp_date')
+        
+        task_val = []
+        for col, task in zip(st.columns(len(columns)), columns):
+            with col:
+                val = info[task] == 'TRUE' or info[task] is True
+                checked = st.checkbox(task, value=val, key=f'{username}_{task}_checkbox')
+                task_val.append(checked)
             
         if st.button('更新用户'):
+            rows = [code, exp_date] + task_val
             if not code:
                 code = info['访问码']
             if code in db.index:
                 st.error('访问码不安全，请重新输入')
-            elif auth.update_user(username, code, exp_date):
+            elif auth.update_user(username, rows):
                 st.success('用户更新成功')
             else:
                 st.error('用户更新失败')
@@ -148,7 +161,10 @@ if st.session_state.name in admins:
                 username_pl.selectbox('用户名', db.index)
             else:
                 st.error('用户删除失败')
+        
+        
                 
+                                
     with all_users_tab:
         db = auth.get_user_db()
         st.dataframe(db.drop(columns=['访问码']), use_container_width=True)

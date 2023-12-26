@@ -1,8 +1,6 @@
 import streamlit as st
 # from streamlit_chat import message
 from tools import dialog, utils, controller, model, auth, speech
-from datetime import datetime, timedelta
-# from streamlit_extras.colored_header import colored_header
 from streamlit_extras.buy_me_a_coffee import button
 import extra_streamlit_components as stx
 import sys
@@ -80,11 +78,11 @@ elif task == Task.GPT4.value:
     help = '输入你的问题，然后按回车提交。'
 elif task == Task.GPT4V.value:
     help = '输入你的问题，并上传图片，然后按回车提交。'
-elif task == Task.BingAI.value:
-    if utils.get_bingai_key(st.session_state.name) is None:
-        disabled, help = True, '请先在设置中填写BingAI的秘钥'
-    else:
-        disabled, help = False, '输入你的问题，然后按回车提交给BingAI。'
+# elif task == Task.BingAI.value:
+#     if utils.get_bingai_key(st.session_state.name) is None:
+#         disabled, help = True, '请先在设置中填写BingAI的秘钥'
+#     else:
+#         disabled, help = False, '输入你的问题，然后按回车提交给BingAI。'
 elif task == Task.text2img.value:
     help = '访客不支持文字做图' if st.session_state.guest else '输入你的prompt'
 elif task == Task.ASR.value:

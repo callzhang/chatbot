@@ -1,7 +1,7 @@
 import streamlit as st
 from . import model, utils
 from datetime import datetime
-from . import dialog, openai, bing, imagegen, speech
+from . import dialog, openai, imagegen, speech
 import logging
 import time, base64
 from streamlit.runtime.uploaded_file_manager import UploadedFile, UploadedFileRec
@@ -21,7 +21,7 @@ task_params = {
     model.Task.GPT4V.value: openai.task_params,
     model.Task.text2img.value: imagegen.task_params,
     model.Task.ASR.value: speech.task_params,
-    model.Task.BingAI.value: bing.task_params,
+    # model.Task.BingAI.value: bing.task_params,
     model.Task.TTS.value: speech.task_params
 }
 
@@ -193,22 +193,22 @@ def gen_response(query=None):
             name = task_params[task][task]['model'],
         )
         st.session_state.conversation.append(bot_response)
-    elif task == Task.BingAI.value:
-        if 'bing' not in st.session_state:
-            logging.warning('Initiating BingAI, please wait...')
-            # show loading
-            st.session_state.bing = bing.BingAI(name=st.session_state.name)
-        queue, thread = st.session_state.bing.chat_stream(user_input)
-        bot_response = Message(
-            role= Role.assistant.name,
-            content = '', 
-            queue = queue, 
-            thread = thread,
-            time = datetime.now(),
-            task = model.Task(task).name,
-            name = task_params[task][task]['model'],
-        )
-        st.session_state.conversation.append(bot_response)
+    # elif task == Task.BingAI.value:
+    #     if 'bing' not in st.session_state:
+    #         logging.warning('Initiating BingAI, please wait...')
+    #         # show loading
+    #         st.session_state.bing = bing.BingAI(name=st.session_state.name)
+    #     queue, thread = st.session_state.bing.chat_stream(user_input)
+    #     bot_response = Message(
+    #         role= Role.assistant.name,
+    #         content = '', 
+    #         queue = queue, 
+    #         thread = thread,
+    #         time = datetime.now(),
+    #         task = model.Task(task).name,
+    #         name = task_params[task][task]['model'],
+    #     )
+    #     st.session_state.conversation.append(bot_response)
     elif task == Task.text2img.value:
         toast = st.toast('正在绘制', icon='🖌️')
         with st.spinner('正在绘制'):
