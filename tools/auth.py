@@ -69,6 +69,23 @@ def get_user_db():
     return df
 
 
+@utils.cached()
+@retry(tries=3, delay=2, backoff=2)
+def get_admin_db():
+    db = Spread(sheet_url, client=client, sheet='admin')
+    df = db.sheet_to_df()
+    print(f'Fetched {len(df)} admin records')
+    return df
+
+def is_admin(username, action=None):
+    db = get_admin_db()
+    query = f'@username in index'
+    if action:
+        query += f' and @action==True'
+    res = db.query(query)
+    return not res.empty
+    
+    
 def validate_code(code:str):
     user_db = get_user_db()
     access_data = user_db.query('访问码==@code')
@@ -89,12 +106,27 @@ def validate_code(code:str):
     return username, cookie_exp_date, authenticated
 
 
-def add_user(username:str, code:str, expiration:str):
+def add_user(username:str, code:str, expiration:datetime):
     user_db = get_user_db()
     if username in user_db.index:
         st.error(f'用户{username}已存在')
         return False
     user_db.loc[username] = [code, expiration]
+    db = Spread(sheet_url, client=client)
+    db.df_to_sheet(user_db, index=True, sheet='用户信息', start='A1', replace=True)
+    return True
+
+def update_user(username:str, code:str, expiration:datetime):
+    user_db = get_user_db()
+    if username not in user_db.index:
+        st.error(f'用户{username}不存在')
+        return False
+    # check code duplication
+    if not user_db.query(f'index!=@username and 访问码==@code').empty:
+        st.error(f'访问码{code}已存在')
+        return False
+    user_db.loc[username] = [code, expiration]
+    user_db['截止日期'] = pd.to_datetime(user_db['截止日期'])
     db = Spread(sheet_url, client=client)
     db.df_to_sheet(user_db, index=True, sheet='用户信息', start='A1', replace=True)
     return True

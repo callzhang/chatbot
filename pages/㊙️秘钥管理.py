@@ -101,16 +101,16 @@ if st.button('退出登录'):
     cm.delete(model.LOGIN_CODE)
     del st.session_state.name
     del st.session_state.conversation
+    st.rerun()
 
 
-# admin
-
-admins = eval(st.secrets.admins)
+# admin panel
+admins = auth.get_admin_db().index
 if st.session_state.name in admins:
     st.subheader('Admin panel')
-    add_user_tab, delete_user_tab, all_users_tab = st.tabs(['添加用户', '删除用户', '用户列表'])
+    st.checkbox(st.session_state.name, True, disabled=True)
+    add_user_tab, edit_user_tab, all_users_tab = st.tabs(['添加用户', '编辑用户', '用户列表'])
     with add_user_tab:
-        st.info('添加用户')
         username = st.text_input('用户名')
         code = st.text_input('访问码')
         expiration = st.date_input('截止日期', value=datetime.now()+timedelta(days=360))
@@ -120,15 +120,35 @@ if st.session_state.name in admins:
             else:
                 st.error('用户添加失败')
             
-    with delete_user_tab:
-        st.info('删除用户')
-        username = st.selectbox('用户名', auth.get_user_db().index)
+    with edit_user_tab:
+        db = auth.get_user_db()
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            username_pl = st.empty()
+            username = username_pl.selectbox('用户名', db.index)
+            info = db.loc[username]
+        with c2:
+            code = st.text_input('新访问码, 留空不更新')
+        with c3:
+            exp_date = st.date_input('新截止日期', value=info['截止日期'])
+            
+        if st.button('更新用户'):
+            if not code:
+                code = info['访问码']
+            if code in db.index:
+                st.error('访问码不安全，请重新输入')
+            elif auth.update_user(username, code, exp_date):
+                st.success('用户更新成功')
+            else:
+                st.error('用户更新失败')
+        
         if st.button('删除用户'):
             if auth.delete_user(username):
                 st.success('用户删除成功')
+                username_pl.selectbox('用户名', db.index)
             else:
                 st.error('用户删除失败')
                 
     with all_users_tab:
-        st.info('用户列表')
-        st.dataframe(auth.get_user_db())
+        db = auth.get_user_db()
+        st.dataframe(db.drop(columns=['访问码']), use_container_width=True)
