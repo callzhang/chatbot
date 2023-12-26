@@ -144,15 +144,16 @@ if st.session_state.name in admins:
                 task_val.append(checked)
             
         if st.button('更新用户'):
-            rows = [code, exp_date] + task_val
             if not code:
                 code = info['访问码']
             if code in db.index:
                 st.error('访问码不安全，请重新输入')
-            elif auth.update_user(username, rows):
-                st.success('用户更新成功')
             else:
-                st.error('用户更新失败')
+                rows = [code, exp_date] + task_val
+                if auth.update_user(username, rows):
+                    st.success('用户更新成功')
+                else:
+                    st.error('用户更新失败')
         
         if st.button('删除用户'):
             if auth.delete_user(username):
