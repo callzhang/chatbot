@@ -130,6 +130,8 @@ def show_actions(message: Message, message_placeholder):
     # display actions
     action_spacing = [0.1]*len(actions) + [1-0.1*len(actions)]
     for col, action in zip(message_placeholder.columns(action_spacing), actions):
+        if RETRY_ACTION in action:
+            action = {'action': RETRY_ACTION, 'label': '🔁', 'help': '重新生成'}
         col.button(action['label'], help=action['help'], key=f'{action["action"]}-{i}', on_click=handle_action, kwargs=action)
         
 
