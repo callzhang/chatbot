@@ -51,8 +51,9 @@ if 'name' not in st.session_state:
 ## dialog history management
 dialog.init_dialog_history(st.session_state.name)
 
-##---- UI -----
-task = st.selectbox('选择功能', Task.values(), key='task', label_visibility='collapsed')
+# ---- UI -----
+# 任务
+task = st.sidebar.selectbox('任务', Task.values(), key='task')
 # 聊天历史列表
 def on_conversation_change():
     del st.session_state.conversation
@@ -69,7 +70,8 @@ if st.session_state.guest:
 # 添加文本输入框
 task_info = auth.user_task_list(st.session_state.name)
 enabled = task_info[task]
-label = None
+label = '文件上传'
+filetypes = None
 max_chars = controller.task_params[task][task]['max_tokens']
 if st.session_state.guest and len(st.session_state.conversation) > 10:
     enabled, help = False, '访客不支持长对话，请联系管理员'
@@ -135,9 +137,8 @@ for i, message in enumerate(st.session_state.conversation):
         st.rerun()
         
 # 文件上传
-if label:
-    attachment = st.file_uploader(
-        label, type=filetypes, key='attachment', disabled=not enabled)
+attachment = st.file_uploader(label, type=filetypes, key='attachment', disabled=not enabled)
+
 
 ## 聊天历史功能区
 c1, c2, c3, c4 = st.sidebar.columns(4)

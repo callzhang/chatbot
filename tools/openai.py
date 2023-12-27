@@ -372,11 +372,6 @@ def conversation2history(conversation:list[model.Message], guest, task) -> list[
     chat_history = [{k: getattr(c, k) for k in key2keep}
                     for c in conversation if c.role in roles2keep and c.content]
     
-    # if task==model.Task.GPT4V.value:
-    #     while chat_history[-1]['role'] != model.Role.user.name:
-    #         chat_history.pop(-1)
-    #     chat_history = [chat_history[-1]]
-    
     # remove excessive history
     while (l:=chat_len(chat_history)) > max_char and len(chat_history) > 1:
         if chat_history[0]['role'] in ['assistant', 'user']:
@@ -456,6 +451,11 @@ def list_dict2string(list_dictionary):
     dict2str = lambda d: '\n'.join([f'{k}: {v}' for k, v in d.items()])
     content = '\n\n---\n\n'.join([dict2str(d) for d in list_dictionary])
     return content
+
+
+def gen_title(question:str):
+    '''use user question to generate a title less than 10 words'''
+    
 
 if __name__ == '__main__':
     # WIP: test gpt4v
