@@ -35,7 +35,7 @@ task_params = {
         'max_tokens': 8000,
     },
     model.Task.GPT4V.value: {
-        'model': 'gpt-4v',
+        'model': 'gpt-4-vision-preview',
         # 'url': 'http://121.127.44.50:8100/v1/chat/gpt4v',
         'url': 'https://api.openai.com/v1/chat/completions',
         'max_tokens': 4000,
@@ -43,7 +43,7 @@ task_params = {
 }
 temperature = 0.7
 roles2keep = ['system', 'user', 'assistant']
-key2keep = ['role', 'content']
+key2keep = ['role', 'content', 'medias']
 accepted_image_types = ['png', 'jpg', 'jpeg']
 
 
@@ -80,20 +80,7 @@ def request_chat(task, data, header, queue=None):
     stream = data['stream']
     assert (stream and queue) or (not stream and queue is None), 'stream and queue must be both True or False'
     try:
-        if not task == model.Task.GPT4V.value: # gpt-3.5, gpt-4
-            # header['Content-Type'] = 'application/json'
-            response = requests.post(url, headers=header, json=data, stream=stream, timeout=model.TIMEOUT/2)
-        else: # gpt4v
-            data2 = {k:v for k, v in data.items() if k in ['messages', 'stream']}
-            message = ''
-            for k in range(len(data['messages'])-1, 0, -1):
-                if data['messages'][k]['role'] == model.Role.user.name:
-                    message = data['messages'][k]['content']
-                    break
-            data2['message'] = message
-            fobject = {'file': (file.name, file)}
-            # header['Content-Type'] = 'multipart/form-data' # The issue is that the Content-Type header in your request is missing the boundary parameter, which is crucial for the server to parse the multipart form data correctly. The requests library in Python should add this parameter automatically when you pass data through the files parameter. It seems like the Content-Type header is being set manually somewhere which is overriding the automatically set header by requests. Make sure that you are not setting the Content-Type header manually anywhere in your code or in any middleware that might be modifying the request.
-            response = requests.post(url, headers=header, data=data2, files=fobject, stream=stream, timeout=300)
+        response = requests.post(url, headers=header, json=data, stream=stream, timeout=model.TIMEOUT/2)
     except Exception as e:
         utils.logger.error(e)
         if queue:
@@ -382,16 +369,55 @@ def history2chat(history:list[dict]) -> list[list]:
 # convert AppMessage to OpenAI chat format
 def conversation2history(conversation:list[model.Message], guest, task) -> list[dict]:
     max_length = 500 if guest else task_params[task]['max_tokens']
-    chat_history = [{k: c.model_dump()[k] for k in key2keep}
+    # keep history with only roles2keep and key2keep
+    chat_history = [{k: getattr(c, k) for k in key2keep}
                     for c in conversation if c.role in roles2keep and c.content]
+    # remove excessive history
     while (l:=chat_len(chat_history)) > max_length and len(chat_history) > 1:
         if chat_history[0]['role'] in ['assistant', 'user']:
             st.toast(f"历史数据过长，舍弃: {chat_history[0]['content'][:10]}")
         chat_history.pop(0)
+    # add prompt
     chat_history.append(dialog.suggestion_prompt)
     if task == model.Task.ChatSearch.value:
         chat_history.append(dialog.search_prompt)
-    utils.logger.info(f"sending conversation rounds: {len(chat_history)}, length:{l}")
+    # process media
+    '''payload = {
+        "model": "gpt-4-vision-preview",
+        "messages": [
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "text",
+                        "text": "What’s in this image?"
+                    },
+                    {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": f"data:image/jpeg;base64,{base64_image}"
+                        }
+                    }
+                ]
+            }
+        ],
+    }'''
+    for chat in chat_history:
+        if medias:=chat.pop('medias', None):
+            content = [{
+                'type': 'text',
+                'text': chat['content']
+            }]
+            for media in medias:
+                if media.type.split('/')[1] in accepted_image_types:
+                    content.append({
+                        'type': 'image_url',
+                        'image_url': {'url': media._file_urls}
+                    })
+                else:
+                    logging.warning(f'Unsupported media type: {media.type}')
+            chat['content'] = content
+    # utils.logger.info(f"sending conversation rounds: {len(chat_history)}, length:{l}")
     return chat_history
 
 # convert openai function_call result to (name, function, query)

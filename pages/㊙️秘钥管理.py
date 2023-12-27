@@ -134,8 +134,7 @@ if st.session_state.name in admins:
         with c2:
             code = st.text_input('新访问码, 留空不更新', key=f'{username}_code')
         with c3:
-            exp_date = st.date_input(
-                '新截止日期', value=info['截止日期'], key=f'{username}_exp_date')
+            exp_date = st.date_input('新截止日期', value=info['截止日期'], key=f'{username}_exp_date')
         
         task_val = []
         for col, task in zip(st.columns(len(columns)), columns):

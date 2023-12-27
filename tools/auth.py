@@ -51,6 +51,7 @@ def get_apify_token():
 client = google_sheet.init_client()
 sheet_url = st.secrets["public_gsheets_url"]
 user_table_header = ['访问码', '截止日期', '信息检索', '对话', '语音识别', '文本朗读', '文字做图', 'GPT4', 'GPT4V', 'Assistant']
+true_value_func = lambda x: x == 'TRUE' or x is True
 
 @utils.cached(timeout=600)
 @retry(tries=3, delay=2, backoff=2)
@@ -58,34 +59,27 @@ def get_user_db():
     db = Spread(sheet_url, client=client)
     df = db.sheet_to_df()
     df['截止日期'] = df['截止日期'].apply(parse)
-    true_value = lambda x: x == 'TRUE' or x is True
-    df[user_table_header[2:]] = df[user_table_header[2:]].applymap(true_value)
+    df[user_table_header[2:]] = df[user_table_header[2:]].applymap(true_value_func)
     print(f'Fetched {len(df)} user records')
     return df
 
-
+#header: username	add	delete	manage
+admin_table_header = ['username', 'add', 'delete', 'manage']
 @utils.cached()
 @retry(tries=3, delay=2, backoff=2)
 def get_admin_db():
     db = Spread(sheet_url, client=client, sheet='admin')
     df = db.sheet_to_df()
+    df[admin_table_header[1:]] = df[admin_table_header[1:]].applymap(true_value_func)
     print(f'Fetched {len(df)} admin records')
     return df
 
-def admin_task(username, task):
-    db = get_user_db()
+def has_admin_task(username, task):
+    db = get_admin_db()
     if username in db.index:
-        return task in db.loc[username, '权限']
+        return db.loc[username, task]
     else:
         return False
-
-def is_admin(username, action=None):
-    db = get_admin_db()
-    query = f'@username in index'
-    if action:
-        query += f' and @action==True'
-    res = db.query(query)
-    return not res.empty
     
     
 def validate_code(code:str):

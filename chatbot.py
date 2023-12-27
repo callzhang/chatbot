@@ -39,7 +39,7 @@ if 'name' not in st.session_state:
     # 登录
     if not code:
         st.info('我是一个集成多个聊天机器人能力的小助手，希望能帮助你提高工作效率😊')
-        code = st.text_input('请输入你的访问码', help='仅限员工使用，请勿外传！')
+        code = st.text_input('请输入你的访问码', help='仅限员工使用，请勿外传！', type='password')
     if code:
         username, exp_date, authenticated = auth.validate_code(code)
         st.session_state.guest = not authenticated
@@ -94,10 +94,6 @@ elif task == Task.TTS.value:
 else:
     raise NotImplementedError(task)
 
-# 文件上传
-if label:
-    attachment = st.file_uploader(
-        label, type=filetypes, key='attachment', disabled=not enabled)
 # chat input
 user_input = st.chat_input(placeholder=help,
                            key='input_text',
@@ -137,7 +133,11 @@ for i, message in enumerate(st.session_state.conversation):
     if st.session_state.desired_layout != 'wide' and message.role=='assistant' and utils.token_size(message.content) > WIDE_LAYOUT_THRESHOLD:
         st.session_state.desired_layout = 'wide'
         st.rerun()
-
+        
+# 文件上传
+if label:
+    attachment = st.file_uploader(
+        label, type=filetypes, key='attachment', disabled=not enabled)
 
 ## 聊天历史功能区
 c1, c2, c3, c4 = st.sidebar.columns(4)

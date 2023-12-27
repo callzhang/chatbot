@@ -115,7 +115,7 @@ import mimetypes
 def parse_file_info(path_or_str):
     if isinstance(path_or_str, str):
         path_or_str = urlparse(path_or_str).path
-    filename = os.path.basename(path_or_str)
+    filename = os.path.basename(str(path_or_str))
     mime_type, encoding = mimetypes.guess_type(filename)
     # filetype = os.path.splitext(filename)[-1].replace('.','')
     return filename, mime_type

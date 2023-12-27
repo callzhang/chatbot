@@ -113,9 +113,12 @@ class Message(BaseModel):
             return None
         medias = []
         if isinstance(media_object, str):
+            # parse media string
             if '=IMAGE(' in media_object:
+                # google sheet image string
                 media_list = re.findall(r'=IMAGE\("(.*)"\)', media_object)
             else:
+                # string of list of image urls
                 try:
                     media_list = eval(media_object)
                     assert isinstance(media_list, list)
@@ -123,6 +126,7 @@ class Message(BaseModel):
                     print(f'failed to eval media string: {media_object}')
                     media_list = []
         elif isinstance(media_object, list):
+            assert all(isinstance(m, UploadedFile) for m in media_list)
             media_list = media_object
         elif isinstance(media_object, UploadedFile):
             assert media_object.type, 'file_type not set'
@@ -157,7 +161,8 @@ class Message(BaseModel):
                 )
                 medias.append(UploadedFile(rec, url))
             elif isinstance(m, UploadedFile):
-                if not m._file_urls:
+                url = not m._file_urls
+                if not url or not isinstance(url, str) or not endpoint in url:
                     url, data = save_uri_to_oss(m)
                     m._file_urls = url
                 medias.append(m)
@@ -177,8 +182,6 @@ class Message(BaseModel):
         if isinstance(actions, str) and actions:
             actions = eval(actions)
             assert isinstance(actions, dict)
-            for k, v in actions.items():
-                assert k in ACTIONS
         return actions or None
     
     @validator('status', pre=True)
