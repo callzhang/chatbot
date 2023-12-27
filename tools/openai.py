@@ -48,9 +48,10 @@ accepted_image_types = ['png', 'jpg', 'jpeg']
 
 
 ## ------------receiving streaming server-sent events（异步）------------
-def chat_stream(conversation:list, task:str, attachment=None, guest=True, tools=None):
+def chat_stream(conversation:list, task:str, guest=True):
     chat_history = conversation2history(conversation, guest, task)
     queue = Queue()
+    max_tokens = task_params[task]['max_tokens']
     # create a queue to store the responses
     url = task_params[task]['url']
     model = task_params[task]['model']
@@ -60,7 +61,7 @@ def chat_stream(conversation:list, task:str, attachment=None, guest=True, tools=
         'temperature': temperature,
         'url': url,
         'model': model,
-        'file': attachment,
+        'max_tokens': max_tokens
     }
     
     header = {
@@ -76,7 +77,6 @@ def chat_stream(conversation:list, task:str, attachment=None, guest=True, tools=
 # get streaming response
 def request_chat(task, data, header, queue=None):
     url = data.pop('url')
-    file = data.pop('file') if 'file' in data else None
     stream = data['stream']
     assert (stream and queue) or (not stream and queue is None), 'stream and queue must be both True or False'
     try:
@@ -237,7 +237,6 @@ def chat_with_search_actor(task, data, header, queue):
     queue.put(model.FINISH_TOKEN)
 
 
-
 def explore_exploit(task, question, search_results, also_asks, tools, queue):
     prompt = f'''
 You are a knowledgeable assistant capable of answering any questions. Here's how to proceed:
@@ -368,19 +367,21 @@ def history2chat(history:list[dict]) -> list[list]:
 
 # convert AppMessage to OpenAI chat format
 def conversation2history(conversation:list[model.Message], guest, task) -> list[dict]:
-    max_length = 500 if guest else task_params[task]['max_tokens']
+    max_char = task_params[task]['max_tokens']
     # keep history with only roles2keep and key2keep
     chat_history = [{k: getattr(c, k) for k in key2keep}
                     for c in conversation if c.role in roles2keep and c.content]
+    
+    # if task==model.Task.GPT4V.value:
+    #     while chat_history[-1]['role'] != model.Role.user.name:
+    #         chat_history.pop(-1)
+    #     chat_history = [chat_history[-1]]
+    
     # remove excessive history
-    while (l:=chat_len(chat_history)) > max_length and len(chat_history) > 1:
+    while (l:=chat_len(chat_history)) > max_char and len(chat_history) > 1:
         if chat_history[0]['role'] in ['assistant', 'user']:
-            st.toast(f"历史数据过长，舍弃: {chat_history[0]['content'][:10]}")
-        chat_history.pop(0)
-    # add prompt
-    chat_history.append(dialog.suggestion_prompt)
-    if task == model.Task.ChatSearch.value:
-        chat_history.append(dialog.search_prompt)
+            # st.toast(f"历史数据过长，舍弃: {chat_history[0]['content'][:10]}")
+            chat_history.pop(0)
     # process media
     '''payload = {
         "model": "gpt-4-vision-preview",
@@ -403,21 +404,29 @@ def conversation2history(conversation:list[model.Message], guest, task) -> list[
         ],
     }'''
     for chat in chat_history:
-        if medias:=chat.pop('medias', None):
-            content = [{
-                'type': 'text',
-                'text': chat['content']
-            }]
-            for media in medias:
-                if media.type.split('/')[1] in accepted_image_types:
-                    content.append({
-                        'type': 'image_url',
-                        'image_url': {'url': media._file_urls}
-                    })
-                else:
-                    logging.warning(f'Unsupported media type: {media.type}')
-            chat['content'] = content
-    # utils.logger.info(f"sending conversation rounds: {len(chat_history)}, length:{l}")
+        if task==model.Task.GPT4V.value:
+            if medias:=chat.pop('medias', None):
+                content = [{
+                    'type': 'text',
+                    'text': chat['content']
+                }]
+                for media in medias:
+                    if media.type.split('/')[1] in accepted_image_types:
+                        content.append({
+                            'type': 'image_url',
+                            'image_url': {'url': media._file_urls}
+                        })
+                    else:
+                        logging.warning(f'Unsupported media type: {media.type}')
+                chat['content'] = content
+        else:
+            chat.pop('medias', None)
+
+    # add prompt
+    chat_history.append(dialog.suggestion_prompt)
+    if task == model.Task.ChatSearch.value:
+        chat_history.append(dialog.search_prompt)
+        
     return chat_history
 
 # convert openai function_call result to (name, function, query)

@@ -41,7 +41,7 @@ with gr.Blocks(theme=random.choice(themes),
         while receiving:
             while queue is not None and len(queue):
                 content = queue.popleft()
-                if content == models.FINISH_TOKEN:
+                if content == model.FINISH_TOKEN:
                     receiving = False
                 else:
                     history[-1]['content'] += content

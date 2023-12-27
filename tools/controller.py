@@ -168,7 +168,6 @@ def gen_response(query=None):
     if task in [Task.ChatGPT.value, Task.GPT4.value, Task.GPT4V.value]:
         queue = openai.chat_stream(conversation=st.session_state.conversation, 
                                     task=task,
-                                    attachment=attachment,
                                     guest=st.session_state.guest)
         if openai.DEBUG:
             queue.put('controller: queue returned\n\n')
