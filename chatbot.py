@@ -70,7 +70,7 @@ if st.session_state.guest:
 # 添加文本输入框
 task_info = auth.user_task_list(st.session_state.name)
 enabled = task_info[task]
-label = '文件上传'
+label = None
 filetypes = None
 max_chars = controller.task_params[task][task]['max_tokens']
 if st.session_state.guest and len(st.session_state.conversation) > 10:
@@ -137,7 +137,8 @@ for i, message in enumerate(st.session_state.conversation):
         st.rerun()
         
 # 文件上传
-attachment = st.file_uploader(label, type=filetypes, key='attachment', disabled=not enabled)
+if label:
+    attachment = st.file_uploader(label, type=filetypes, key='attachment', disabled=not enabled)
 
 
 ## 聊天历史功能区

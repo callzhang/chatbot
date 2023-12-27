@@ -51,7 +51,7 @@ accepted_image_types = ['png', 'jpg', 'jpeg']
 def chat_stream(conversation:list, task:str, guest=True):
     chat_history = conversation2history(conversation, guest, task)
     queue = Queue()
-    max_tokens = task_params[task]['max_tokens']
+    max_tokens = task_params[task]['max_tokens'] - chat_len(chat_history)
     # create a queue to store the responses
     url = task_params[task]['url']
     model = task_params[task]['model']
