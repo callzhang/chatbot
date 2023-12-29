@@ -337,7 +337,11 @@ def display_media(media, container=st):
     elif media.type == 'mp4' or media_type == model.MediaType.video.name:
         container.video(media)
     else:
-        raise NotImplementedError(media.tpye)
+        filename = media.name
+        try:
+            container.download_button(filename, data=media, file_name=filename)
+        except Exception as e:
+            container.text(f'Failed to display media: {filename}')
 
 
 def call_functions(message):
