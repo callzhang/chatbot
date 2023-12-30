@@ -59,7 +59,7 @@ def get_user_db():
     db = Spread(sheet_url, client=client)
     df = db.sheet_to_df()
     df['截止日期'] = df['截止日期'].apply(parse)
-    df[user_table_header[2:]] = df[user_table_header[2:]].applymap(true_value_func)
+    df[user_table_header[2:]] = df[user_table_header[2:]].map(true_value_func)
     print(f'Fetched {len(df)} user records')
     return df
 
@@ -81,7 +81,7 @@ def has_admin_task(username, task):
     else:
         return False
     
-    
+@utils.cached(timeout=60)
 def validate_code(code:str):
     user_db = get_user_db()
     access_data = user_db.query('访问码==@code')

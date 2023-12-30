@@ -1,3 +1,4 @@
+import threading
 import oss2
 import requests
 import os, re, time,logging, ast
@@ -71,6 +72,16 @@ def cached(timeout=3600):
         return wrapper
 
     return decorator
+
+
+## function wrapper
+def run_in_thread(func):
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        thread = threading.Thread(target=func, args=args, kwargs=kwargs)
+        thread.start()
+    return wrapper
+
 
 ## Markdown
 # utls to markdown
@@ -228,7 +239,6 @@ def filter_suggestion(content: str):
     pattern = r'\[?SUGGESTION\].*$'
     content = '\n'.join(re.split(pattern, content, re.MULTILINE))
     return content
-
 
 if __name__ == '__main__':
     # print(token_size('hello world'))

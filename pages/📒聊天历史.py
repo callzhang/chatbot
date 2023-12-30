@@ -1,7 +1,7 @@
 import streamlit as st
 from tools import dialog, utils
 
-st.set_page_config(initial_sidebar_state="auto")
+# st.set_page_config(initial_sidebar_state="auto")
 
 chat_per_page = 20
 

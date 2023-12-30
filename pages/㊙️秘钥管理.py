@@ -101,7 +101,6 @@ if st.button('退出登录'):
     cm.delete(model.LOGIN_CODE)
     del st.session_state.name
     del st.session_state.conversation
-    st.rerun()
 
 
 # admin panel

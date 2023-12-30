@@ -34,7 +34,7 @@ with gr.Blocks(theme=random.choice(themes),
         })
         history.append({'role': 'assistant', 'content': ''})
         chatbot = openai.history2chat(history)
-        queue = openai.chat_stream(history, name)
+        queue = openai.create_chat(history, name)
         start = time.time()
         receiving = True
         actions = {}

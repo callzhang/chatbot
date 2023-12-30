@@ -16,7 +16,7 @@ FINISH_TOKEN = '[DONE]'
 TIMEOUT = 60
 LOGIN_CODE = 'login_code'
 SERVER_ERROR = '[SERVER_ERROR]'
-TOOL_RESULT = '[TOOL_RESULT]'
+FUNCTION_CALLS = '[FUNCTION_CALLS]'
 STATUS = '[STATUS]'
 HELP = '[HELP]'
 
@@ -80,7 +80,7 @@ class Message(BaseModel):
     name: str # user name or model name
     queue: Queue | None = None # used to get streaming message from another thread
     suggestions: list[str] | None = None # suggestions for user to choose
-    actions: dict[str, str] | None = None # actions for user to choose
+    actions: list | None = None # actions for user to choose
     medias: list[UploadedFile] | None = None # media files kept in bytes, e.g. images, audio, video
     functions: list[dict] = [] # functions to be executed, e.g. google search
     
@@ -178,10 +178,10 @@ class Message(BaseModel):
         return suggestions or None
     
     @validator('actions', pre=True)
-    def set_actions(actions:list[str]|str):
-        if isinstance(actions, str) and actions:
+    def set_actions(actions:list[dict]|str):
+        if actions and isinstance(actions, str):
             actions = eval(actions)
-            assert isinstance(actions, dict)
+            assert all(isinstance(a, dict) for a in actions)
         return actions or None
     
     @validator('status', pre=True)

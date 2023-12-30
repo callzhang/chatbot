@@ -42,7 +42,15 @@ if 'name' not in st.session_state:
         code = st.text_input('请输入你的访问码', help='仅限员工使用，请勿外传！', type='password')
     if code:
         username, exp_date, authenticated = auth.validate_code(code)
-        st.session_state.guest = not authenticated
+        if authenticated:
+            st.success('登录成功！')
+        else:
+            # comfirm to login as guest
+            st.info(f'登录失败，是否以访客（{username}）登录？')
+            if st.button('以访客身份登录'):
+                st.session_state.guest = True
+            else:
+                st.stop()
         st.session_state.name = username
         cm.set(model.LOGIN_CODE, code, expires_at=exp_date)
         st.rerun()
@@ -170,7 +178,7 @@ with c4: # 修改
         new_title = st.session_state.new_title_text
         if new_title in st.session_state.dialog_history:
             new_title += '(1)'
-        dialog.edit_dialog_name(st.session_state.name, st.session_state.selected_title, new_title)
+        dialog.edit_dialog_title(st.session_state.name, st.session_state.selected_title, new_title)
         st.session_state.new_title = new_title
     if st.button('✏️', help='修改对话名称'):
         new_title = st.sidebar.text_input('修改名称', st.session_state.selected_title, help='修改当前对话标题', key='new_title_text', on_change=update_title)

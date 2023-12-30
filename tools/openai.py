@@ -41,14 +41,14 @@ task_params = {
         'max_tokens': 4000,
     }
 }
-temperature = 0.7
-roles2keep = ['system', 'user', 'assistant']
-key2keep = ['role', 'content', 'medias']
-accepted_image_types = ['png', 'jpg', 'jpeg']
+TEMPERATURE = 0.7
+ROLES2KEEP = ['system', 'user', 'assistant']
+KEYS2KEEP = ['role', 'content', 'medias']
+IMAGE_TYPES = ['png', 'jpg', 'jpeg']
 
 
 ## ------------receiving streaming server-sent events（异步）------------
-def chat_stream(conversation:list, task:str, guest=True):
+def create_chat(conversation:list, task:str, guest=True):
     chat_history = conversation2history(conversation, guest, task)
     queue = Queue()
     max_tokens = task_params[task]['max_tokens'] - chat_len(chat_history)
@@ -58,7 +58,7 @@ def chat_stream(conversation:list, task:str, guest=True):
     data = {
         'messages': chat_history,
         'stream': STREAMING,
-        'temperature': temperature,
+        'temperature': TEMPERATURE,
         'url': url,
         'model': model,
         'max_tokens': max_tokens
@@ -69,25 +69,46 @@ def chat_stream(conversation:list, task:str, guest=True):
     }
     if DEBUG:
         queue.put('⏳chat streaming thread starting \n\n')
-    thread = threading.Thread(target=request_chat, args=(task, data, header, queue))
+    thread = threading.Thread(target=send_chat, args=(data, header, queue))
     thread.start()
     return queue
     
 
 # get streaming response
-def request_chat(task, data, header, queue=None):
-    url = data.pop('url')
+@retry(tries=3, delay=2, backoff=2)
+def send_chat(data, header, queue=None):
+    url = data.pop('url', None)
+    if not url:
+        for k,m in task_params.items():
+            if m['model'] == data['model']:
+                url = m['url']
+                break
+    assert url, 'url is not specified'
     stream = data['stream']
     assert (stream and queue) or (not stream and queue is None), 'stream and queue must be both True or False'
+    message_tool_calls = []
+    message_content = ''
+    message = {
+        'content': message_content,
+        'tool_calls': message_tool_calls,
+        'role': 'assistant'
+    }
     try:
         response = requests.post(url, headers=header, json=data, stream=stream, timeout=model.TIMEOUT/2)
     except Exception as e:
         utils.logger.error(e)
         if queue:
             queue.put({model.SERVER_ERROR: '服务器超时'})
-        return
-    if stream and response.ok:
-        tool_results = []
+        return message
+    
+    if not response.ok:
+        estring = f'出错啦，请重试: {response.status_code}, {response.json()}'
+        logging.error(estring)
+        logging.error(json.dumps(data, indent=2, ensure_ascii=False))
+        if queue:
+            queue.put({model.SERVER_ERROR: estring})
+        return message
+    elif stream:
         for line in response.iter_lines():
             if not line:
                 continue
@@ -95,72 +116,89 @@ def request_chat(task, data, header, queue=None):
                 key, value = line.decode().split(':', 1)
                 # finish
                 if model.FINISH_TOKEN in value:
-                    if 'tools' in data:
-                        # if this is a function call, then return the tool result and do the next
-                        print('tool_results: ', tool_results)
-                        return {model.TOOL_RESULT: tool_results}
-                    else:
+                    if 'tools' not in data:
                         queue.put('\n\n')
                         queue.put(model.FINISH_TOKEN)
                         print('\n'+'-'*60)
-                        return
-                # unpack
+                    # append response to messages, so the next tool calls can be memorized
+                    data['messages'].append(message)
+                    return message
+                # parse response for `content` and `tool_calls`
                 value = json.loads(value.strip())
                 if key == 'data':
                     content = value['choices'][0]['delta'].get('content')
                     tool_calls = value['choices'][0]['delta'].get('tool_calls')
                     if content:
+                        message_content += content
                         queue.put(content)
                         print(content, end='')
                     if tool_calls:
                         for call in tool_calls:
                             index = call['index']
-                            if 'id' in call: # new function
-                                assert index == len(tool_results)
-                                tool_results.append(call['function'])
+                            function = call['function']
+                            if call.get('id'): # new function
+                                message_tool_calls.append(call)
                             else: # update function params
-                                for k, v in call['function'].items():
-                                    tool_results[index][k] += v
+                                for k, v in function.items():
+                                    partial_function = message_tool_calls[index]['function']
+                                    partial_function[k] += v
                 else:
                     raise Exception(line.decode())
             except Exception as e:
                 print(e, line)
-    elif not stream and response.ok:
+        # if no FINISH_TOKEN received, then finish the request
+        queue.put(model.FINISH_TOKEN)
+        return message
+    elif not stream:
         message = response.json()['choices'][0]['message']
-        chat_content = message.get('content')
-        function_calls = message.get('tool_calls')
-        tool_calls = [call['function'] for call in function_calls] if function_calls else None
-        not chat_content or print('message:', chat_content)
-        not tool_calls or print('tool_calls:', tool_calls)
-        if queue:
-            queue.put(chat_content)
-            queue.put(model.FINISH_TOKEN)
-        return {
-            'content': chat_content,
-            model.TOOL_RESULT: tool_calls,
-        }
+        data['messages'].append(message)
+        return message
     else:
-        estring = f'出错啦，请重试: {response.status_code}, {response.text}'
-        logging.error(estring)
-        logging.error(json.dumps(data, indent=2, ensure_ascii=False))
-        if queue:
-            queue.put({model.SERVER_ERROR: estring})
-        return
-    
+        raise Exception(f'Unknown response: {response}')
+        
 
-##--------------------信息检索------------------
+@retry(tries=3, delay=2, backoff=2)
+def simple_chat(user_input, instruction=''):
+    messages = [
+        {'role': model.Role.system.name, 'content': instruction},
+        {'role': model.Role.user.name, 'content': user_input},
+    ]
+    data = {
+        'messages': messages,
+        'model': task_params[model.Task.ChatGPT.value]['model'],
+        'stream': False
+    }
+    response = client.chat.completions.create(**data)
+    output = response.choices[0].message.content
+    return output
+
+
+# --------------------信息检索------------------
+'''
+1. 将TOOLS和聊天历史发送给openai
+2. 得到openai的回复，如果有tool_calls，则执行tool_calls
+3. 对于每个tool_call，如果是google_search，则执行搜索，得到搜索结果
+4. 对于每个tool_call，如果是parse_web，则执行网页解析，得到网页内容
+5. 将搜索结果和网页内容加入到memory中，数据结构为：[{'title': 'xxx', 'url': 'xxx', 'content': 'xxx'}, ...]
+6. 调用`explore_exploit`函数，将搜索结果和网页内容传入，如果memory有变化，则传入TOOLS
+7. 得到的结果，如果是有文本生成，则展示在网页端
+8. 如果有tool_calls，则回到2，否则结束
+'''
+
+TOOLS = [
+    {'type': 'function', 'function': apify.function_google_search},
+    {'type': 'function', 'function': apify.function_parse_web_content}
+]
+
 def chat_with_search(conversation:list, task:str):
     chat_history = conversation2history(conversation, guest=False, task=task)
     data = {
         'messages': chat_history,
         'stream': True,
-        'temperature': temperature,
+        'temperature': TEMPERATURE,
         'url': task_params[task]['url'],
         'model': task_params[task]['model'],
-        'tools': [
-            {'type': 'function', 'function': apify.function_google_search},
-            {'type': 'function', 'function': apify.function_parse_web_content}
-        ]
+        'tools': TOOLS
     }
     header = {
         'Authorization': f'Bearer {auth.get_openai_key(task)}'
@@ -181,39 +219,28 @@ def chat_with_search_actor(task, data, header, queue):
         a. if more tool command is issued, then the loop back → 2 
         b. if assistant can answer the question directly, then output the content, finish chat
     '''
-    result = request_chat(task, data, header, queue)
-    if not result or not (tool_results := result[model.TOOL_RESULT]):
+    message = send_chat(data, header, queue)
+    function_calls = message['tool_calls']
+    if not function_calls:
         queue.put(model.FINISH_TOKEN)
         return
-    
     # memory
-    question = [chat['content'] for chat in data['messages'] if chat['role'] == model.Role.user.name][-1]
-    search_results, also_asks = [], []
+    messages = data['messages']
     new_info = True
-    while tool_results and new_info:
+    while function_calls and new_info:
         new_info = False
-        for name, func, kwargs in get_function_calls(tool_results):
-            if name == 'google_search':
+        for fid, name, func, kwargs in parse_function_calls(function_calls):
+            if name == apify.function_google_search['name']:
                 message = f'🔍Searching: {kwargs["query"]}'
+                queue.put({model.STATUS: message})
                 search_result, also_ask = func(**kwargs)
-                queue.put({model.STATUS: message, model.HELP: list_dict2string(search_result)})
-                search_results += search_result
-                also_asks += also_ask
+                queue.put({model.STATUS: f'🔍Found {len(search_result)} search results', model.HELP: list_dict2string(search_result)})
+                function_result = search_result + also_ask
                 new_info = True
-            elif name == 'parse_web_content':
+            elif name == apify.function_parse_web_content['name']:
                 url = kwargs["url"]
                 title = kwargs.get('title') or urlparse(url).hostname
-                target_search = [s for s in search_results if s['url'] == url or s['title'] == title]
-                if not target_search:
-                    target_search = {
-                        'title': title,
-                        'url': url
-                    }
-                    search_results.append(target_search)
-                else:
-                    target_search = target_search[0]
-                if target_search.get('content'):
-                    continue
+                # crawl the website
                 web_content = func(**kwargs)
                 if not web_content:
                     queue.put({model.STATUS: f'❌Cannot access: [{title}]({url})'})
@@ -221,24 +248,33 @@ def chat_with_search_actor(task, data, header, queue):
                 else:
                     new_info = True
                     size = utils.token_size(web_content)
-                    if size > (max_len:=task_params[task]['max_web_content']):
-                        web_content = summarize_content(question, web_content, int(max_len/2), queue)
-                        size2 = utils.token_size(web_content)
-                        print(f'🔍Ingested web content: {title} with {size2} tokens (shortened from {size} tokens)')
                     queue.put({model.STATUS: f'⏳Reading: [{title}]({url}), 共{size}tokens', model.HELP: web_content})
-                # write the result
-                target_search['content'] = web_content
-        info = '\n'.join([f"[{r['title']}]({r['content']})" for r in search_results if r.get('content')])
-        logging.info(info)
+                function_result = web_content
+            else:
+                raise NotImplementedError(f'Unknown function: {name}')
+            # add to memory
+            messages.append(
+                {
+                    "tool_call_id": fid,
+                    "role": "tool",
+                    "name": name,
+                    "content": str(function_result),
+                }
+            )
+        # check all functions are executed, otherwise remove the record
+        all_tool_call_ids = [m['tool_call_id'] for m in messages if m.get('tool_call_id')]
+        for m in messages:
+            for f in m.get('tool_calls', []):
+                if f['id'] not in all_tool_call_ids:
+                    m['tool_calls'].remove(f)
 
         # parse the web content or answer the question
-        tool_results = explore_exploit(task, question, search_results, also_asks, tools=new_info, queue=queue)
-
+        function_calls = explore_exploit(task, messages, tools=TOOLS if new_info else None, queue=queue)
+        # if tool_results returned, then continue the searching/extraction
     queue.put(model.FINISH_TOKEN)
 
 
-def explore_exploit(task, question, search_results, also_asks, tools, queue):
-    prompt = f'''
+prompt = f'''
 You are a knowledgeable assistant capable of answering any questions. Here's how to proceed:
 
 1. **Understand the User Question**: Review the user's question carefully.
@@ -255,51 +291,49 @@ You are a knowledgeable assistant capable of answering any questions. Here's how
    - If citing from search results, use the format [[NUMBER](URL)] at the end of the corresponding line, where NUMBER is the entry index and URL is the provided link.
 
 **Remember**:
-   - Avoid requesting to parse web entries with a 'content' field already existed.
+   - Avoid requesting to parse web entries (in search results) with 'content' field already existed.
    - No need to request tool usage unless necessary.
    - Today is {datetime.now()}
 '''
-    new_search_result = [s.copy() for s in search_results]
-    for s in new_search_result:
-        if s.get('content') and s.get('url'):
-            s.pop('url')
-            print(f'pop url: {s["title"]}')
-    query = f'''[User Question]: {question}
-    [Similar questions]：{also_asks}
-    [Search results]：{new_search_result}'''
-    chat_history = [
-        {'role': model.Role.system.name, 'content': prompt},
-        {'role': model.Role.user.name, 'content': query}
-    ]
-    data = {
-        'messages': chat_history,
-        'url': task_params[task]['url'],
-        'model': task_params[task]['model'],
-        'temperature': temperature,
-        'stream': True,
-    }
+RAG_PROMPT = {'role': model.Role.system.name, 'content': prompt}
+
+def explore_exploit(task, messages, tools, queue):
+    question = get_question(messages)
     # shorten the chat history if too long
-    while (ratio:=utils.token_size(str(chat_history)) / task_params[task]['max_tokens']) > 1:
-        new_search_result.sort(key=lambda x: utils.token_size(x.get('content')), reverse=True)
-        content = new_search_result[0]['content']
+    while (ratio := utils.token_size(str(messages)) / task_params[task]['max_tokens']) > 1:
+        # shorten the memory if too long, works recursively and always shortens the longest content
+        longest_message = sorted(messages, key=lambda x: utils.token_size(x.get('content')), reverse=True)[0]
+        content = longest_message['content']
+        title = longest_message['title']
         target_length = int(utils.token_size(content)/ratio/2)
         # content2 = utils.truncate_text(content, target_length)
         content2 = summarize_content(question, content, target_length, queue)
-        print(f'🔍Truncated chat history: {utils.token_size(content)} -> {utils.token_size(content2)}')
-        new_search_result[0]['content'] = content2
-        return explore_exploit(task, question, new_search_result, also_asks, tools, queue)
+        print(f'🔍Truncated content of {title}: {utils.token_size(content)} -> {utils.token_size(content2)}')
+        for m in messages:
+            if m.get('content') == content:
+                m['content'] = content2
+        return explore_exploit(task, messages, tools, queue)
     
+    # size reduced, continue to send request
+    if RAG_PROMPT not in messages:
+        messages.append(RAG_PROMPT)
+    data = {
+        'messages': messages,
+        'url': task_params[task]['url'],
+        'model': task_params[task]['model'],
+        'temperature': TEMPERATURE,
+        'stream': True,
+    }
     if tools:
-        data['tools'] = [{'type':'function', 'function': apify.function_parse_web_content}]
+        data['tools'] = tools
     header = {
         'Authorization': f'Bearer {auth.get_openai_key(task)}'
     }
-    queue.put({model.STATUS: '⏳thinking...'})
-    result = request_chat(task, data, header, queue)
-    if not result:
-        return None
-    tool_results = result.get(model.TOOL_RESULT)
-    return tool_results
+    queue.put({model.STATUS: '⏳Thinking...'})
+    message = send_chat(data, header, queue)
+    function_calls = message.get('tool_calls')
+    #TODO: save results to media
+    return function_calls
     
 
 def summarize_content(question, content, max_words, queue):
@@ -342,14 +376,17 @@ def summarize_content(question, content, max_words, queue):
     header = {
         'Authorization': f'Bearer {auth.get_openai_key(model.Task.ChatGPT.value)}'
     }
-    response = request_chat(model.Task.ChatGPT.value, data, header)
+    response = send_chat(data, header)
     content2 = response['content']
-    print(f'🔍Summarized content: {utils.token_size(content)} -> {utils.token_size(content2)}')
+    print(f'🔍Summarized content: {utils.token_size(content)} -> {utils.token_size(content2)}\n{content2}')
     content2 = utils.truncate_text(content2, max_words)
     return content2
          
          
 #------------------UTILITIES-----------------
+# message modifier
+get_question = lambda messages: [chat['content'] for chat in messages if chat['role'] == model.Role.user.name][-1]
+
 # adapter for gradio
 def history2chat(history:list[dict]) -> list[list]:
     chatbot = []
@@ -368,9 +405,14 @@ def history2chat(history:list[dict]) -> list[list]:
 # convert AppMessage to OpenAI chat format
 def conversation2history(conversation:list[model.Message], guest, task) -> list[dict]:
     max_char = task_params[task]['max_tokens']
+    chat_history = []
+    # add prompt
+    chat_history.append(dialog.suggestion_prompt)
+    if task == model.Task.ChatSearch.value:
+        chat_history.append(dialog.search_prompt)
     # keep history with only roles2keep and key2keep
-    chat_history = [{k: getattr(c, k) for k in key2keep}
-                    for c in conversation if c.role in roles2keep and c.content]
+    chat_history += [{k: getattr(c, k) for k in KEYS2KEEP}
+                    for c in conversation if c.role in ROLES2KEEP and c.content]
     
     # remove excessive history
     while (l:=chat_len(chat_history)) > max_char and len(chat_history) > 1:
@@ -406,7 +448,7 @@ def conversation2history(conversation:list[model.Message], guest, task) -> list[
                     'text': chat['content']
                 }]
                 for media in medias:
-                    if media.type.split('/')[1] in accepted_image_types:
+                    if media.type.split('/')[1] in IMAGE_TYPES:
                         content.append({
                             'type': 'image_url',
                             'image_url': {'url': media._file_urls}
@@ -416,29 +458,32 @@ def conversation2history(conversation:list[model.Message], guest, task) -> list[
                 chat['content'] = content
         else:
             chat.pop('medias', None)
-
-    # add prompt
-    chat_history.append(dialog.suggestion_prompt)
-    if task == model.Task.ChatSearch.value:
-        chat_history.append(dialog.search_prompt)
         
     return chat_history
 
 # convert openai function_call result to (name, function, query)
-def get_function_calls(function_calls, max_calls=3):
+def parse_function_calls(function_calls, max_calls=20):
     i = 0
     for call in function_calls:
-        if (i:=i+1) == max_calls:
-            return
-        # {'id': 'call_ZRg5LUmA7zhRTaMXc2ug9SsJ', 'type': 'function', 'function': {'name': 'google_search', 'arguments': '{"query": "\\u5317\\u4...29\\u6c14"}'}}
-        name = call['name']
+        # {
+        #     'id': 'call_ZRg5LUmA7zhRTaMXc2ug9SsJ', 
+        #     'type': 'function', 
+        #     'function': {
+        #         'name': 'google_search', 
+        #         'arguments': '{"query": "\\u5317\\u4...29\\u6c14"}'
+        #     }
+        # }
+        function = call['function']
+        name = function['name']
         tool_info = apify.tool_list[name]
         func = tool_info['call']
         menifest = tool_info['function']
         keys = [str(k) for k in menifest['parameters']['properties'].keys()]
-        arguments = json.loads(call['arguments'])
+        arguments = json.loads(function['arguments'])
         query = {k:arguments[k] for k in keys if k in arguments}
-        yield name, func, query
+        yield call['id'], name, func, query
+        if (i := i+1) == max_calls:
+            return
         
 
 def chat_len(conversation):
@@ -453,9 +498,6 @@ def list_dict2string(list_dictionary):
     return content
 
 
-def gen_title(question:str):
-    '''use user question to generate a title less than 10 words'''
-    
 
 if __name__ == '__main__':
     # WIP: test gpt4v

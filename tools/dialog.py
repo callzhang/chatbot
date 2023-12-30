@@ -84,16 +84,9 @@ def load_conversation(username, title):
 ## message
 class Chat(model.Message):
     pass
-
-def update_message(username, title, message:model.Message, create=False):
-    # execute update in a thread using update_message_worker to avoid blocking
-    from threading import Thread
-    t = Thread(target=update_message_worker, args=(username, title, message, create))
-    t.start()
-    return t
     
-
-def update_message_worker(username, title, message:model.Message, create=False):
+@utils.run_in_thread
+def update_message(username, title, message:model.Message, create=False):
     from .controller import openai_image_types
     dialog = get_dialog(username, title)
     # create chat entry as a dict
@@ -230,7 +223,7 @@ def new_dialog(username, dialog_title=None) -> str:
     return dialog_title
     
     
-def edit_dialog_name(username, old_title, new_title):
+def edit_dialog_title(username, old_title, new_title):
     history = get_dialog_history(username)
     cell = history.find(old_title, in_column=2)
     history.update_cell(row=cell.row, col=cell.col, value=new_title)
@@ -243,34 +236,11 @@ def delete_dialog(username, title):
     dialog = history.spreadsheet.worksheet(sheet)
     history.spreadsheet.del_worksheet(dialog)
     history.delete_rows(cell.row)
-
+    
 
 def convert_update_value(record: dict):
     message_value = [str(record[k]) if k in record and record[k] else '' for k in DIALOG_HEADER]
     return message_value
-
-## file attachment, convert to local file when saving
-# def allocate_file_path(filename):
-#     username = st.session_state.name
-#     filepath = CHAT_LOG_ROOT/username/filename
-#     while os.path.exists(filepath):
-#         filename_idx = filename.split('.')[0].split('_')[-1]
-#         try:
-#             filename_idx = int(filename_idx)
-#             filename_idx += 1
-#         except:
-#             filename_idx = 1
-#         filename = filename.split('.')[0] + f'_{filename_idx}.' + filename.split('.')[1]
-#         filepath = CHAT_LOG_ROOT/username/filename
-#         logging.info(f'file exists, allocate a new one: {filepath}')
-#     return filepath
-
-
-# def save_files_to_uri_list(file: UploadedFile):
-#     filepath = allocate_file_path(file.name)
-#     with open(filepath, 'wb') as f:
-#         f.write(file.getvalue())
-#     return str(filepath)
 
 
 ## -------- assistant session ---------

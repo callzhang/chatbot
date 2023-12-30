@@ -10,7 +10,7 @@ Task = model.Task
 Role = model.Role
 Message = model.Message
 
-openai_image_types = openai.accepted_image_types
+openai_image_types = openai.IMAGE_TYPES
 speech_media_types = speech.accepted_types
 
 
@@ -29,6 +29,7 @@ RETRY_ACTION = '[RETRY]'
 MODIFY_ACTION = '[MODIFY]'
 SPEAK_ACTION = '[SPEAK_ACTION]'
 DELETE_ACTION = '[DELETE_ACTION]'
+COPY_ACTION = '[COPY_ACTION]'
 ACTIONS = [RETRY_ACTION, SPEAK_ACTION, MODIFY_ACTION]
 
 ## display assistant message
@@ -54,7 +55,7 @@ def show_streaming_message(message: Message, message_placeholder):
                         message.content += f'\n\n{v}'
                         message.actions = [{'action': RETRY_ACTION, 'label': '🔁', 'help': '重新生成'}]
                         finish_reply(message)
-                    elif functions := item.get(model.TOOL_RESULT):
+                    elif functions := item.get(model.FUNCTION_CALLS):
                         # message.content += f'```{json.dumps(v, indent=2, ensure_ascii=False)}```'
                         message.functions += functions
                         # finish_reply(message)
@@ -115,23 +116,39 @@ def show_actions(message: Message, message_placeholder):
     actions = message.actions
     if not actions:
         actions = []
-        if message.content and message.role==Role.assistant.name:
-            actions.append({'action': SPEAK_ACTION, 'label':'🔈', 'autoplay': True,
-                            'help': '朗读', 'container': message_placeholder, 'message': message})
-        if last:
-            actions.append({'action': RETRY_ACTION, 'label': '🔁',
+    else:
+        seen = set()
+        actions = [x for x in actions if not (x['action'] in seen or seen.add(x['action']))]
+    actions_labels = [a['action'] for a in actions]
+    if message.content and message.role==Role.assistant.name and SPEAK_ACTION not in actions_labels:
+        actions.append({'action': SPEAK_ACTION, 'label':'🔈', 'autoplay': True,
+                        'help': '朗读', 'container': message_placeholder, 'message': message})
+    if last:
+        if RETRY_ACTION not in actions_labels:
+            actions.append({'action': RETRY_ACTION, 'label': '🔄',
                             'help': '重新生成', 'container': message_placeholder})
-            actions.append({'action': DELETE_ACTION, 'label': '❌', 'help': '删除',
+        if not st.session_state.guest and DELETE_ACTION not in actions_labels:
+            actions.append({'action': DELETE_ACTION, 'label': '🗑️', 'help': '删除',
                             'container': message_placeholder})
-        if modify:
-            actions.append({'action': MODIFY_ACTION, 'label': '✍🏼',
-                            'help': '修改', 'container': message_placeholder})
+    if modify and MODIFY_ACTION not in actions_labels:
+        actions.append({'action': MODIFY_ACTION, 'label': '✍🏼',
+                        'help': '修改', 'container': message_placeholder})
     
     # display actions
     action_spacing = [0.1]*len(actions) + [1-0.1*len(actions)]
     for col, action in zip(message_placeholder.columns(action_spacing), actions):
-        if RETRY_ACTION in action:
-            action = {'action': RETRY_ACTION, 'label': '🔁', 'help': '重新生成'}
+        if RETRY_ACTION in action:# hot fix
+            action = {'action': RETRY_ACTION, 'label': '🔄', 'help': '重新生成'}
+        # pleace html button directly for COPY_ACTION: not working
+        if action['action'] == COPY_ACTION:
+            from streamlit.components.v1 import html
+            button_html = f"""
+            <button onclick="navigator.clipboard.writeText('{message.content}')"> 📋 </button>
+            """
+            with col:
+                html(button_html, width=200, height=200)
+            continue
+
         col.button(action['label'], help=action['help'], key=f'{action["action"]}-{i}', on_click=handle_action, kwargs=action)
         
 
@@ -152,6 +169,10 @@ def gen_response(query=None):
     if not user_input:
         return
     
+    # gen title
+    if not [m for m in st.session_state.conversation if m.role == Role.user.name]:
+        gen_title(user_input, st.session_state.name, st.session_state.selected_title)
+    
     # create user query
     query_message = Message(
         role = model.Role.user.name,
@@ -168,7 +189,7 @@ def gen_response(query=None):
     # response
     print(f'Start task({task}): {st.session_state.conversation[-1].content}')
     if task in [Task.ChatGPT.value, Task.GPT4.value, Task.GPT4V.value]:
-        queue = openai.chat_stream(conversation=st.session_state.conversation, 
+        queue = openai.create_chat(conversation=st.session_state.conversation, 
                                     task=task,
                                     guest=st.session_state.guest)
         if openai.DEBUG:
@@ -194,22 +215,6 @@ def gen_response(query=None):
             name = task_params[task][task]['model'],
         )
         st.session_state.conversation.append(bot_response)
-    # elif task == Task.BingAI.value:
-    #     if 'bing' not in st.session_state:
-    #         logging.warning('Initiating BingAI, please wait...')
-    #         # show loading
-    #         st.session_state.bing = bing.BingAI(name=st.session_state.name)
-    #     queue, thread = st.session_state.bing.chat_stream(user_input)
-    #     bot_response = Message(
-    #         role= Role.assistant.name,
-    #         content = '', 
-    #         queue = queue, 
-    #         thread = thread,
-    #         time = datetime.now(),
-    #         task = model.Task(task).name,
-    #         name = task_params[task][task]['model'],
-    #     )
-    #     st.session_state.conversation.append(bot_response)
     elif task == Task.text2img.value:
         toast = st.toast('正在绘制', icon='🖌️')
         with st.spinner('正在绘制'):
@@ -266,7 +271,16 @@ def gen_response(query=None):
     
     return query_message, bot_response
 
-
+## UTILITY FUNCTIONS
+@utils.run_in_thread
+def gen_title(user_input, username, old_title):
+    instruction = '请用10个字以内的文字概括用户的输入，用于生成一个对话标题。请直接生成标题。'
+    title = openai.simple_chat(user_input, instruction)
+    dialog.edit_dialog_title(username, old_title, title)
+    st.toast(f'标题生成为：{title}', icon='🤩')
+    st.rerun()
+    
+    
 def handle_action(action, **kwargs):
     container = kwargs.get('container')
     if action == RETRY_ACTION:
