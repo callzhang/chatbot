@@ -1,3 +1,4 @@
+import asyncio
 import threading
 import oss2
 import requests
@@ -50,38 +51,70 @@ def truncate_text(text, max_len=1024):
     return text_t
 
 ## cache management
-def cached(timeout=3600):
+def cached(func=None, *, timeout=3600):
     # thread safe cache
     cache = defaultdict()
-
-    def decorator(func):
-        @wraps(func)
-        def wrapper(*args, **kwargs):
-            key = str(args) + str(kwargs)
+    if func is None:
+        return lambda func: cached(func, timeout=timeout)
     
-            if key not in cache or time.time() - cache[key]['time'] > timeout:
-                result = func(*args, **kwargs)
-                cache[key] = {'result': result, 'time': time.time()}
-            return cache[key]['result']
-
-        wrapper.cache = cache
-        # f.clear_cache() to clear the cache
-        wrapper.clear_cache = cache.clear
-        # f.delete_cache(key) to delete the cache of key
-        wrapper.delete_cache = cache.pop
-        return wrapper
-
-    return decorator
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        key = str(args) + str(kwargs)
+        if key not in cache or time.time() - cache[key]['time'] > timeout:
+            result = func(*args, **kwargs)
+            cache[key] = {'result': result, 'time': time.time()}
+        return cache[key]['result']
+    
+    wrapper.cache = cache
+    # f.clear_cache() to clear the cache
+    wrapper.clear_cache = cache.clear
+    # f.delete_cache(key) to delete the cache of key
+    wrapper.delete_cache = cache.pop
+    return wrapper
 
 
 ## function wrapper
-def run_in_thread(func):
+def run_in_thread(func=None, *, callback=None, timeout=20):
+    '''Decorator to wrap a function in a thread.
+    @param func: function to be wrapped
+    @param callback: function to be called after func is executed, \
+        it must accept exact one argument. If callback is defined, \
+            it will schedule a rerun to streamlit's main thread.
+    @param timeout: timeout in seconds to wait for func to finish
+    '''
+    if func is None:
+        # If run_in_thread is called with parentheses, return a decorator.
+        return lambda func: run_in_thread(func, callback=callback, timeout=timeout)
+    from streamlit.runtime.scriptrunner import add_script_run_ctx, get_script_run_ctx
+    from queue import Queue
+    from . import st_hack
+    import inspect
+    t0 = time.time()
+    if callable(callback):
+        sig = inspect.signature(callback)
+        params = sig.parameters
+        if len(params) != 1:
+            raise ValueError(f"callback function ({callback.__name__}) must accept at most one argument")
+
     @wraps(func)
     def wrapper(*args, **kwargs):
-        thread = threading.Thread(target=func, args=args, kwargs=kwargs)
+        result_queue = Queue()
+        # use a wrapper to put result in queue
+        def result_wrapper(*args, **kwargs):
+            result = func(*args, **kwargs)
+            if isinstance(result, Queue):
+                result = result.get(timeout=timeout)
+            if callable(callback):
+                callback(result)
+                st_hack.notify_rerun()
+            result_queue.put(result)
+        # create a thread to run the function
+        thread = threading.Thread(target=result_wrapper, args=args, kwargs=kwargs)
+        ctx = get_script_run_ctx()
+        add_script_run_ctx(thread, ctx)
         thread.start()
+        return result_queue
     return wrapper
-
 
 ## Markdown
 # utls to markdown
@@ -241,7 +274,7 @@ def filter_suggestion(content: str):
     return content
 
 if __name__ == '__main__':
-    # print(token_size('hello world'))
+    ## print(token_size('hello world'))
     # print(truncate_text('These smaller models provide a good balance between performance and resource usage, making them suitable for environments where computational resources are a concern. Remember that while smaller models are faster and use less memory, they might not capture the nuances of language as effectively as larger models like GPT-2 or BERT-base.', 5))
     
     # save_uri_to_oss('voice.mp3', 'Derek')
@@ -260,3 +293,4 @@ if __name__ == '__main__':
 :["了解大型语言模型的发展有助于实现哪些自然语言处理的应用？", "大型语言模型与传统语言模型的区别在哪里？", "大型语言模型的未来发展方向是什么？"]'''
     content, suggestion = parse_suggestions(content)
     print(suggestion)
+

@@ -166,7 +166,8 @@ def simple_chat(user_input, instruction=''):
     data = {
         'messages': messages,
         'model': task_params[model.Task.ChatGPT.value]['model'],
-        'stream': False
+        'stream': False,
+        'temperature': TEMPERATURE,
     }
     response = client.chat.completions.create(**data)
     output = response.choices[0].message.content
@@ -304,7 +305,7 @@ def explore_exploit(task, messages, tools, queue):
         # shorten the memory if too long, works recursively and always shortens the longest content
         longest_message = sorted(messages, key=lambda x: utils.token_size(x.get('content')), reverse=True)[0]
         content = longest_message['content']
-        title = longest_message['title']
+        title = longest_message.get('title')
         target_length = int(utils.token_size(content)/ratio/2)
         # content2 = utils.truncate_text(content, target_length)
         content2 = summarize_content(question, content, target_length, queue)

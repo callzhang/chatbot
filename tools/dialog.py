@@ -10,6 +10,7 @@ from gspread_pandas import Spread
 from streamlit.runtime.uploaded_file_manager import UploadedFile
 from functools import lru_cache
 from dateutil.parser import parse
+from retry import retry
 
 # 管理对话历史，存储在云端Google Drive里面
 # 文件夹：·CHAT_FOLDER·
@@ -83,6 +84,7 @@ def load_conversation(username, title):
 
 ## message
 class Chat(model.Message):
+    '''Chat object for streamlit UI'''
     pass
     
 @utils.run_in_thread
@@ -102,7 +104,7 @@ def update_message(username, title, message:model.Message, create=False):
             message_dict['medias'] = f'=IMAGE("{first_url}")'
         else:
             message_dict['medias'] = media_uri_list
-    message_value = convert_update_value(message_dict)
+    message_value = convert_to_cell_values(message_dict)
     if create:
         res = dialog.append_row(message_value, value_input_option='USER_ENTERED')
     else:
@@ -146,7 +148,8 @@ def get_messages(username, title):
             logging.error(f'Error when loading chat: {c} \n Error: {e}')
     return messages
 
-
+@utils.run_in_thread
+@retry(3, delay=1, backoff=2)
 def delete_message(username, title, row_num=None):
     dialog = get_dialog(username, title)
     row_num = row_num or dialog.row_count
@@ -174,7 +177,7 @@ def get_dialog(username:str, title:str) -> Worksheet:
     return dialog
 
 
-@lru_cache
+@utils.cached(timeout=7200)
 def get_dialog_history(username) -> Worksheet:
     # history_file = CHAT_LOG_ROOT/username/'history.csv'
     record_file = Spread(username, sheet='history', client=client, create_sheet=True, create_spread=True)
@@ -188,8 +191,9 @@ def get_dialog_history(username) -> Worksheet:
 
 
 def new_dialog(username, dialog_title=None) -> str:
+    now = datetime.now()
     if not dialog_title:
-        dialog_title = datetime.now().strftime(TIME_FORMAT)
+        dialog_title = now.strftime(TIME_FORMAT)
     history = get_dialog_history(username)
     all_historys = history.col_values(2)[1:]
     if dialog_title in history.col_values(2):
@@ -198,11 +202,11 @@ def new_dialog(username, dialog_title=None) -> str:
             print(f'dialog title {dialog_title} exists!')
             return dialog_title
     else:
-        row = [datetime.now().isoformat(), dialog_title, dialog_title]
-        if not all_historys:
-            history.append_row(row, value_input_option='USER_ENTERED')
-        else:
+        row = [now.isoformat(), dialog_title, dialog_title]
+        if all_historys:
             history.insert_row(row, index=2, value_input_option='USER_ENTERED')
+        else:
+            history.append_row(row, value_input_option='USER_ENTERED')
     # create sheet
     new_dialog = history.spreadsheet.add_worksheet(dialog_title, 1, 1)
     new_dialog.append_row(DIALOG_HEADER)
@@ -218,61 +222,64 @@ def new_dialog(username, dialog_title=None) -> str:
     conversation_df['task'] = None
     conversation_df['name'] = 'system'
     records = conversation_df.to_dict(orient='records')
-    message_values = [convert_update_value(r) for r in records]
+    message_values = [convert_to_cell_values(r) for r in records]
     new_dialog.append_rows(message_values, value_input_option='USER_ENTERED')
     return dialog_title
     
-    
+@utils.run_in_thread(callback=lambda _: st.rerun())
 def edit_dialog_title(username, old_title, new_title):
     history = get_dialog_history(username)
     cell = history.find(old_title, in_column=2)
     history.update_cell(row=cell.row, col=cell.col, value=new_title)
+    st.session_state.new_title = new_title
+    return new_title
     
-    
+
+@utils.run_in_thread(callback=lambda _: st.rerun())
 def delete_dialog(username, title):
     history = get_dialog_history(username)
     cell = history.find(title, in_column=2)
-    sheet = history.cell(row=cell.row, col=3).value
-    dialog = history.spreadsheet.worksheet(sheet)
-    history.spreadsheet.del_worksheet(dialog)
+    # sheet = history.cell(row=cell.row, col=3).value
+    # dialog = history.spreadsheet.worksheet(sheet)
+    # history.spreadsheet.del_worksheet(dialog)
     history.delete_rows(cell.row)
     
-
-def convert_update_value(record: dict):
+# utils
+def convert_to_cell_values(record: dict):
     message_value = [str(record[k]) if k in record and record[k] else '' for k in DIALOG_HEADER]
     return message_value
 
 
 ## -------- assistant session ---------
-THREAD_FILE = 'threads.csv'
-def get_threads(username):
-    threads_history_file = CHAT_LOG_ROOT/username/THREAD_FILE
-    if os.path.exists(threads_history_file):
-        history = pd.read_csv(threads_history_file, index_col=0)
-    else:
-        history = pd.DataFrame(columns=['time', 'title', 'thread_id', 'assistant_id'])
-    return history
+# THREAD_FILE = 'threads.csv'
+# def get_threads(username):
+#     threads_history_file = CHAT_LOG_ROOT/username/THREAD_FILE
+#     if os.path.exists(threads_history_file):
+#         history = pd.read_csv(threads_history_file, index_col=0)
+#     else:
+#         history = pd.DataFrame(columns=['time', 'title', 'thread_id', 'assistant_id'])
+#     return history
 
 
-def new_thread(username, thread_id, assistant_id, title=None):
-    history = get_threads(username)
-    new_dialog = pd.DataFrame([{
-        'time': datetime.now(),
-        'title': title if title else datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-        'thread_id': thread_id,
-        'assistant_id': assistant_id,
-    }])
-    history = pd.concat([new_dialog, history], ignore_index=True)
-    os.makedirs(CHAT_LOG_ROOT/username, exist_ok=True)
-    history.to_csv(CHAT_LOG_ROOT/username/THREAD_FILE)
-    return title
+# def new_thread(username, thread_id, assistant_id, title=None):
+#     history = get_threads(username)
+#     new_dialog = pd.DataFrame([{
+#         'time': datetime.now(),
+#         'title': title if title else datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+#         'thread_id': thread_id,
+#         'assistant_id': assistant_id,
+#     }])
+#     history = pd.concat([new_dialog, history], ignore_index=True)
+#     os.makedirs(CHAT_LOG_ROOT/username, exist_ok=True)
+#     history.to_csv(CHAT_LOG_ROOT/username/THREAD_FILE)
+#     return title
 
 
-def delete_thread(username, thread_id):
-    history = get_dialog_history(username)
-    chat = history.query('thread_id==@thread_id')
-    history.drop(chat.index.values, inplace=True)
-    history.to_csv(CHAT_LOG_ROOT/username/THREAD_FILE)
+# def delete_thread(username, thread_id):
+#     history = get_dialog_history(username)
+#     chat = history.query('thread_id==@thread_id')
+#     history.drop(chat.index.values, inplace=True)
+#     history.to_csv(CHAT_LOG_ROOT/username/THREAD_FILE)
 
 
 ## ----------- Utils -----------

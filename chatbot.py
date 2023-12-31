@@ -166,7 +166,7 @@ with c2: # 删除
     if st.button('⛔', help='删除当前聊天记录', disabled=st.session_state.guest):
         del st.session_state.conversation
         dialog.delete_dialog(st.session_state.name, st.session_state.selected_title)
-        st.rerun()
+        # st.rerun()
 with c3: # 导出
     if st.download_button(label='📤', help='导出对话',
                         data=dialog.conversation2markdown(st.session_state.conversation, st.session_state.name), 
@@ -175,16 +175,19 @@ with c3: # 导出
         st.success('导出成功！')
 with c4: # 修改
     def update_title():
+        from queue import Queue
+        import time
         new_title = st.session_state.new_title_text
         if new_title in st.session_state.dialog_history:
             new_title += '(1)'
-        dialog.edit_dialog_title(st.session_state.name, st.session_state.selected_title, new_title)
-        st.session_state.new_title = new_title
+        result = dialog.edit_dialog_title(st.session_state.name, st.session_state.selected_title, new_title)
+        
+        return result
     if st.button('✏️', help='修改对话名称'):
         new_title = st.sidebar.text_input('修改名称', st.session_state.selected_title, help='修改当前对话标题', key='new_title_text', on_change=update_title)
         
         
-from streamlit_extras.add_vertical_space import add_vertical_space
+# from streamlit_extras.add_vertical_space import add_vertical_space
 from tools import components
 # buy me a coffee
 with st.sidebar:

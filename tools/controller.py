@@ -170,8 +170,14 @@ def gen_response(query=None):
         return
     
     # gen title
-    if not [m for m in st.session_state.conversation if m.role == Role.user.name]:
-        gen_title(user_input, st.session_state.name, st.session_state.selected_title)
+    user_inputs = [m.content for m in st.session_state.conversation if m.role == Role.user.name]
+    user_inputs.append(user_input)
+    try:
+        raw_title = datetime.strptime(st.session_state.selected_title, dialog.TIME_FORMAT)
+    except:
+        raw_title = False
+    if len(user_inputs) < 5 or raw_title:
+        gen_title(str(user_inputs), st.session_state.name, st.session_state.selected_title)
     
     # create user query
     query_message = Message(
@@ -274,11 +280,12 @@ def gen_response(query=None):
 ## UTILITY FUNCTIONS
 @utils.run_in_thread
 def gen_title(user_input, username, old_title):
-    instruction = '请用10个字以内的文字概括用户的输入，用于生成一个对话标题。请直接生成标题。'
-    title = openai.simple_chat(user_input, instruction)
-    dialog.edit_dialog_title(username, old_title, title)
-    st.toast(f'标题生成为：{title}', icon='🤩')
-    st.rerun()
+    instruction = '请根据用户问题列表生成一个对话标题，用10个字以内的文字概括用户的输入。请直接生成标题，最后不要带标点。'
+    new_title = openai.simple_chat(user_input, instruction)
+    st.session_state.new_title = new_title
+    dialog.edit_dialog_title(username, old_title, new_title)
+    st.toast(f'标题生成为：{new_title}', icon='🆕')
+    # st.rerun()
     
     
 def handle_action(action, **kwargs):
@@ -356,11 +363,6 @@ def display_media(media, container=st):
             container.download_button(filename, data=media, file_name=filename)
         except Exception as e:
             container.text(f'Failed to display media: {filename}')
-
-
-def call_functions(message):
-    functions = message.functions
-    queue = message.queue
     
     
 def delete_last_message():
