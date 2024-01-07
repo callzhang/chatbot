@@ -206,7 +206,6 @@ def chat_with_search(conversation:list, task:str):
     }
     queue = Queue()
     thread = threading.Thread(target=chat_with_search_actor, args=(task, data, header, queue))
-    # thread.daemon = True
     thread.start()
     return queue
     
@@ -227,17 +226,16 @@ def chat_with_search_actor(task, data, header, queue):
         return
     # memory
     messages = data['messages']
-    new_info = True
-    while function_calls and new_info:
-        new_info = False
+    # new_info = True
+    while function_calls:# and new_info:
+        # new_info = False
         for fid, name, func, kwargs in parse_function_calls(function_calls):
             if name == apify.function_google_search['name']:
-                message = f'🔍Searching: {kwargs["query"]}'
-                queue.put({model.STATUS: message})
+                queue.put({model.STATUS: f'🔍Searching: {kwargs["query"]}'})
                 search_result, also_ask = func(**kwargs)
                 queue.put({model.STATUS: f'🔍Found {len(search_result)} search results', model.HELP: list_dict2string(search_result)})
                 function_result = search_result + also_ask
-                new_info = True
+                # new_info = True
             elif name == apify.function_parse_web_content['name']:
                 url = kwargs["url"]
                 title = kwargs.get('title') or urlparse(url).hostname
@@ -247,7 +245,7 @@ def chat_with_search_actor(task, data, header, queue):
                     queue.put({model.STATUS: f'❌Cannot access: [{title}]({url})'})
                     web_content = '无法访问该网页'
                 else:
-                    new_info = True
+                    # new_info = True
                     size = utils.token_size(web_content)
                     queue.put({model.STATUS: f'⏳Reading: [{title}]({url}), 共{size}tokens', model.HELP: web_content})
                 function_result = web_content
@@ -270,7 +268,7 @@ def chat_with_search_actor(task, data, header, queue):
                     m['tool_calls'].remove(f)
 
         # parse the web content or answer the question
-        function_calls = explore_exploit(task, messages, tools=TOOLS if new_info else None, queue=queue)
+        function_calls = explore_exploit(task, messages, tools=TOOLS, queue=queue)
         # if tool_results returned, then continue the searching/extraction
     queue.put(model.FINISH_TOKEN)
 
@@ -285,14 +283,13 @@ You are a knowledgeable assistant capable of answering any questions. Here's how
    - **Similar questions**: Review the provided questions and answers similar to the user's question.
 
 3. **Formulate Your Answer**: 
-   - If the provided information suffices, answer the question in the user question's language.
-   - If additional information is needed, you may request to parse up to three websites.
+   - If the provided information is enough, answer the question in the user question's language.
+   - If additional information is needed, use tools to retrive.
 
 4. **Citing Sources**: 
-   - If citing from search results, use the format [[NUMBER](URL)] at the end of the corresponding line, where NUMBER is the entry index and URL is the provided link.
+   - If citing from search results, use the format `[NUMBER](URL)` at the end of the corresponding sentence, where NUMBER is the entry index and URL is the provided link.
 
 **Remember**:
-   - Avoid requesting to parse web entries (in search results) with 'content' field already existed.
    - No need to request tool usage unless necessary.
    - Today is {datetime.now()}
 '''
@@ -318,6 +315,8 @@ def explore_exploit(task, messages, tools, queue):
     # size reduced, continue to send request
     if RAG_PROMPT not in messages:
         messages.append(RAG_PROMPT)
+    else:
+        print('RAG prompt already exists?')
     data = {
         'messages': messages,
         'url': task_params[task]['url'],
