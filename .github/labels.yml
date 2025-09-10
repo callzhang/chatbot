@@ -1,0 +1,189 @@
+# GitHub Labels Configuration for Stardust.ai Chatbot
+# This file defines all the labels used in the repository
+
+# Priority Labels
+- name: "priority: critical"
+  color: "d73a4a"
+  description: "Critical issues that need immediate attention"
+
+- name: "priority: high"
+  color: "f85149"
+  description: "High priority issues that should be addressed soon"
+
+- name: "priority: medium"
+  color: "fbca04"
+  description: "Medium priority issues"
+
+- name: "priority: low"
+  color: "0e8a16"
+  description: "Low priority issues"
+
+# Type Labels
+- name: "bug"
+  color: "d73a4a"
+  description: "Something isn't working"
+
+- name: "enhancement"
+  color: "a2eeef"
+  description: "New feature or request"
+
+- name: "feature-request"
+  color: "7057ff"
+  description: "Request for a new feature"
+
+- name: "documentation"
+  color: "0075ca"
+  description: "Improvements or additions to documentation"
+
+- name: "performance"
+  color: "ff6b6b"
+  description: "Performance improvements or issues"
+
+- name: "optimization"
+  color: "ff9f43"
+  description: "Code optimization and refactoring"
+
+- name: "security"
+  color: "b60205"
+  description: "Security-related issues"
+
+- name: "needs-triage"
+  color: "f9d0c4"
+  description: "Issues that need to be triaged"
+
+# Feature Area Labels
+- name: "ui/ux"
+  color: "e99695"
+  description: "User interface and user experience improvements"
+
+- name: "mobile"
+  color: "c2e0c6"
+  description: "Mobile-specific features or issues"
+
+- name: "ai/ml"
+  color: "bfd4f2"
+  description: "AI and machine learning features"
+
+- name: "api"
+  color: "d4c5f9"
+  description: "API-related changes or issues"
+
+- name: "integration"
+  color: "f9d0c4"
+  description: "Third-party integrations"
+
+- name: "analytics"
+  color: "c5def5"
+  description: "Analytics and monitoring features"
+
+- name: "internationalization"
+  color: "fef2c0"
+  description: "Internationalization and localization"
+
+- name: "devops"
+  color: "006b75"
+  description: "DevOps, deployment, and infrastructure"
+
+- name: "testing"
+  color: "0e8a16"
+  description: "Testing and quality assurance"
+
+# Status Labels
+- name: "status: needs-review"
+  color: "fbca04"
+  description: "Needs review from maintainers"
+
+- name: "status: in-progress"
+  color: "0052cc"
+  description: "Work in progress"
+
+- name: "status: blocked"
+  color: "d73a4a"
+  description: "Blocked by other issues or dependencies"
+
+- name: "status: ready-for-review"
+  color: "0e8a16"
+  description: "Ready for code review"
+
+- name: "status: needs-testing"
+  color: "fbca04"
+  description: "Needs testing before merge"
+
+- name: "status: on-hold"
+  color: "6f42c1"
+  description: "Temporarily on hold"
+
+# Difficulty Labels
+- name: "good first issue"
+  color: "7057ff"
+  description: "Good for newcomers"
+
+- name: "help wanted"
+  color: "008672"
+  description: "Extra attention is needed"
+
+- name: "beginner-friendly"
+  color: "0e8a16"
+  description: "Suitable for beginners"
+
+- name: "intermediate"
+  color: "fbca04"
+  description: "Requires intermediate skills"
+
+- name: "advanced"
+  color: "d73a4a"
+  description: "Requires advanced skills"
+
+# Technology Labels
+- name: "python"
+  color: "3776ab"
+  description: "Python-related changes"
+
+- name: "streamlit"
+  color: "ff4b4b"
+  description: "Streamlit framework changes"
+
+- name: "gradio"
+  color: "ff6b6b"
+  description: "Gradio framework changes"
+
+- name: "openai"
+  color: "412991"
+  description: "OpenAI API integration"
+
+- name: "docker"
+  color: "2496ed"
+  description: "Docker and containerization"
+
+- name: "frontend"
+  color: "563d7c"
+  description: "Frontend and UI changes"
+
+- name: "backend"
+  color: "000000"
+  description: "Backend and API changes"
+
+# Special Labels
+- name: "duplicate"
+  color: "cfd3d7"
+  description: "This issue or pull request already exists"
+
+- name: "invalid"
+  color: "e4e669"
+  description: "This doesn't seem right"
+
+- name: "wontfix"
+  color: "ffffff"
+  description: "This will not be worked on"
+
+- name: "question"
+  color: "d876e3"
+  description: "Further information is requested"
+
+- name: "discussion"
+  color: "f9d0c4"
+  description: "Discussion and brainstorming"
+
+- name: "breaking-change"
+  color: "b60205"
+  description: "Breaking change that affects existing functionality"
