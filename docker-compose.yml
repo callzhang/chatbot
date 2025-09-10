@@ -1,0 +1,40 @@
+version: '3.8'
+
+services:
+  stardust-chatbot:
+    build: .
+    ports:
+      - "8501:8501"
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - BING_COOKIE=${BING_COOKIE:-}
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY:-}
+      - DEBUG=false
+      - STREAMING=true
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8501/_stcore/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.stardust-chatbot.rule=Host(`stardust-ai.local`)"
+      - "traefik.http.services.stardust-chatbot.loadbalancer.server.port=8501"
+
+  # Optional: Add Redis for caching
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+
+volumes:
+  redis_data:
