@@ -1,0 +1,77 @@
+name: 🔒 Security Issue
+description: Report a security vulnerability or concern
+title: "[SECURITY] "
+labels: ["security", "needs-triage"]
+assignees: []
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **⚠️ IMPORTANT: For security issues, please do NOT post publicly.**
+        
+        If you believe you have found a security vulnerability, please email us directly at security@stardust.ai instead of creating a public issue.
+
+  - type: dropdown
+    id: security-category
+    attributes:
+      label: Security Category
+      description: What type of security issue is this?
+      options:
+        - 🔐 Authentication/Authorization
+        - 🛡️ Data Protection
+        - 🔑 API Security
+        - 🌐 Network Security
+        - 📱 Client Security
+        - 🗄️ Database Security
+        - 🔧 Configuration Security
+        - 📊 Privacy Concerns
+        - 🐳 Container Security
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: security-description
+    attributes:
+      label: Security Issue Description
+      description: Describe the security concern (be careful not to reveal sensitive details)
+      placeholder: "Describe the security issue without revealing sensitive information..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: impact-assessment
+    attributes:
+      label: Impact Assessment
+      description: What is the potential impact of this security issue?
+      placeholder: "Describe the potential impact and severity..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction-steps
+    attributes:
+      label: Steps to Reproduce
+      description: How can this security issue be reproduced? (Be careful with sensitive details)
+      placeholder: "Provide steps to reproduce (without revealing sensitive information)..."
+
+  - type: textarea
+    id: suggested-fix
+    attributes:
+      label: Suggested Fix
+      description: Do you have any suggestions for fixing this issue?
+      placeholder: "Describe any suggested fixes or mitigations..."
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Security Checklist
+      description: Please confirm the following
+      options:
+        - label: I understand this is a security issue and should be handled privately
+          required: true
+        - label: I have not included sensitive information in this report
+          required: true
+        - label: I am willing to work with the team to resolve this issue
+          required: true

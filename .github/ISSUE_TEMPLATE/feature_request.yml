@@ -1,0 +1,87 @@
+name: 🚀 Feature Request
+description: Suggest a new feature or enhancement for Stardust.ai Chatbot
+title: "[FEATURE] "
+labels: ["enhancement", "feature-request"]
+assignees: []
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for suggesting a new feature! Please fill out the form below to help us understand your request.
+
+  - type: dropdown
+    id: feature-category
+    attributes:
+      label: Feature Category
+      description: What type of feature are you requesting?
+      options:
+        - 🎨 UI/UX Improvements
+        - 🔧 Core Functionality
+        - 📱 Mobile Experience
+        - 🚀 Performance & Optimization
+        - 🔒 Security & Privacy
+        - 🌐 Internationalization
+        - 📊 Analytics & Monitoring
+        - 🎯 AI/ML Features
+        - 🔌 Integrations & APIs
+        - 📚 Documentation
+        - 🧪 Testing & Quality
+        - 🐳 DevOps & Deployment
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: feature-title
+    attributes:
+      label: Feature Title
+      description: A clear, concise title for your feature request
+      placeholder: "Add dark mode toggle"
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem-description
+    attributes:
+      label: Problem Description
+      description: What problem does this feature solve? Who would benefit from it?
+      placeholder: "Describe the problem or need this feature addresses..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposed-solution
+    attributes:
+      label: Proposed Solution
+      description: How should this feature work? Describe your ideal implementation.
+      placeholder: "Describe how you envision this feature working..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives Considered
+      description: What other solutions have you considered?
+      placeholder: "Describe any alternative solutions or workarounds..."
+
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Additional Context
+      description: Any other context, screenshots, or examples that would help?
+      placeholder: "Add any additional context, mockups, or examples..."
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Checklist
+      description: Please confirm the following
+      options:
+        - label: I have searched existing issues to ensure this is not a duplicate
+          required: true
+        - label: I have provided a clear description of the problem and solution
+          required: true
+        - label: I am willing to help implement this feature if needed
+          required: false

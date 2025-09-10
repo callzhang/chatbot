@@ -1,0 +1,74 @@
+name: ⚡ Performance Improvement
+description: Suggest performance optimizations or improvements
+title: "[PERFORMANCE] "
+labels: ["performance", "optimization"]
+assignees: []
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for suggesting a performance improvement! Please provide details about the optimization you'd like to see.
+
+  - type: dropdown
+    id: performance-category
+    attributes:
+      label: Performance Category
+      description: What area needs performance improvement?
+      options:
+        - 🚀 Response Time
+        - 💾 Memory Usage
+        - 🌐 Network Performance
+        - 📱 Mobile Performance
+        - 🔄 Caching
+        - 🗄️ Database Performance
+        - 🎨 UI Rendering
+        - 🔧 API Performance
+        - 📊 Analytics Performance
+        - 🐳 Container Performance
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: performance-title
+    attributes:
+      label: Performance Issue Title
+      description: A clear title for the performance improvement
+      placeholder: "Optimize chat history loading time"
+    validations:
+      required: true
+
+  - type: textarea
+    id: current-performance
+    attributes:
+      label: Current Performance
+      description: Describe the current performance issue
+      placeholder: "Describe what is slow or inefficient..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposed-optimization
+    attributes:
+      label: Proposed Optimization
+      description: How should this be optimized?
+      placeholder: "Describe your proposed optimization approach..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected-improvement
+    attributes:
+      label: Expected Improvement
+      description: What performance improvement do you expect?
+      placeholder: "Describe the expected performance gains..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Additional Context
+      description: Any additional context, benchmarks, or measurements
+      placeholder: "Add any performance metrics, benchmarks, or additional context..."
