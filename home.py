@@ -43,6 +43,7 @@ pages = [
         # Section("My section", icon="🎈️"),
         Page("pages/📒聊天历史.py", icon="📒"),
         Page("pages/㊙️秘钥管理.py", icon="㊙️"),
+        Page("pages/⚙️设置.py", "设置", "⚙️"),
     ]
 
 if st.secrets.debug:

@@ -21,3 +21,15 @@ gspread-pandas
 python-dateutil
 oss2
 sentry-sdk
+
+# New dependencies for enhanced features
+plotly
+pandas
+numpy
+scikit-learn
+sentence-transformers
+faiss-cpu
+PyPDF2
+python-docx
+openpyxl
+streamlit-card
